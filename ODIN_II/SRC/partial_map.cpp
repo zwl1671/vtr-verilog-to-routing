@@ -48,6 +48,7 @@ void partial_map_node(nnode_t *node, short traverse_number, netlist_t *netlist);
 
 void instantiate_not_logic(nnode_t *node, short mark, netlist_t *netlist);
 void instantiate_buffer(nnode_t *node, short mark, netlist_t *netlist);
+void instantiate_primitive_cell(nnode_t *node, short mark, netlist_t *netlist);
 void instantiate_bitwise_logic(nnode_t *node, operation_list op, short mark, netlist_t *netlist);
 void instantiate_bitwise_reduction(nnode_t *node, operation_list op, short mark, netlist_t *netlist);
 void instantiate_logical_logic(nnode_t *node, operation_list op, short mark, netlist_t *netlist);
@@ -149,6 +150,14 @@ void partial_map_node(nnode_t *node, short traverse_number, netlist_t *netlist)
 			break;
 		case BUF_NODE:
 			instantiate_buffer(node, traverse_number, netlist);
+			break;
+
+		case CMOS:
+		case PMOS:
+		case NMOS:
+		case NOTIF0:
+		case NOTIF1:
+			instantiate_primitive_cell(node, traverse_number, netlist);
 			break;
 
 		case BITWISE_AND:
@@ -298,12 +307,8 @@ void partial_map_node(nnode_t *node, short traverse_number, netlist_t *netlist)
 		case PAD_NODE:
 			/* some nodes already in the form that is mapable */
 			break;
-		case CASE_EQUAL:
-		case CASE_NOT_EQUAL:
-		case DIVIDE:
-		case MODULO:
 		default:
-			error_message(NETLIST_ERROR, 0, -1, "Partial map: node should have been converted to softer version.");
+			error_message(NETLIST_ERROR, 0, -1, "Partial map: node type <%s> should have been converted to softer version.", operation_name(node->type));
 			break;
 	}
 }
@@ -366,26 +371,15 @@ void instantiate_multi_port_mux(nnode_t *node, short mark, netlist_t * /*netlist
  *-------------------------------------------------------------------------------------------*/
 void instantiate_not_logic(nnode_t *node, short mark, netlist_t * /*netlist*/)
 {
-	int width = node->num_input_pins;
-	nnode_t **new_not_cells;
-	int i;
-
-	new_not_cells = (nnode_t**)vtr::malloc(sizeof(nnode_t*)*width);
-
-	for (i = 0; i < width; i++)
-	{
-		new_not_cells[i] = make_not_gate(node, mark);
-	}
-
 	/* connect inputs and outputs */
-	for(i = 0; i < width; i++)
+	for(int i = 0; i < node->num_input_pins; i++)
 	{
-		/* Joining the inputs to the new soft NOT GATES */
-		remap_pin_to_new_node(node->input_pins[i], new_not_cells[i], 0);
-		remap_pin_to_new_node(node->output_pins[i], new_not_cells[i], 0);
-	}
+		nnode_t *new_not_cells = make_not_gate(node, mark);
 
-	vtr::free(new_not_cells);
+		/* Joining the inputs to the new soft NOT GATES */
+		remap_pin_to_new_node(node->input_pins[i], new_not_cells, 0);
+		remap_pin_to_new_node(node->output_pins[i], new_not_cells, 0);
+	}
 }
 
 /*---------------------------------------------------------------------------------------------
@@ -394,19 +388,14 @@ void instantiate_not_logic(nnode_t *node, short mark, netlist_t * /*netlist*/)
  *-------------------------------------------------------------------------------------------*/
 void instantiate_buffer(nnode_t *node, short /*mark*/, netlist_t * /*netlist*/)
 {
-	int width = node->num_input_pins;
-	int i;
-
 	/* for now we just pass the signals directly through */
-	for (i = 0; i < width; i++)
+	for (int i = 0; i < node->num_input_pins; i++)
 	{
-		int idx_2_buffer = node->input_pins[i]->pin_net_idx;
-
 		/* join all fanouts of the output net with the input pins net */
 		join_nets(node->input_pins[i]->net, node->output_pins[i]->net);
 
 		/* erase the pointer to this buffer */
-		node->input_pins[i]->net->fanout_pins[idx_2_buffer] = NULL;
+		node->input_pins[i]->net->fanout_pins[node->input_pins[i]->pin_net_idx] = NULL;
 	}
 }
 
@@ -472,6 +461,104 @@ void instantiate_logical_logic(nnode_t *node, operation_list op, short mark, net
 
 	remap_pin_to_new_node(node->output_pins[0], new_logic_cell, 0);
 }
+
+/*---------------------------------------------------------------------------------------------
+ * (function: instantiate_bitwise_reduction )
+ * 	Makes 2 input gates to break into bitwise
+ *-------------------------------------------------------------------------------------------*/
+void instantiate_primitive_cell(nnode_t *node, short mark, netlist_t * /* netlist */)
+{
+	oassert(node->num_output_pins == 1);
+
+	nnode_t *primitive_gate;
+
+	switch(node->type)
+	{
+		case CMOS:
+		{
+			oassert(node->num_input_pins == 3);
+			primitive_gate = make_2port_gate(node->type, 2, 2, 1, node, mark);
+
+			/* map the inputs to the mux */
+			remap_pin_to_new_node(node->input_pins[2], primitive_gate, 2);
+			add_input_pin_to_node(primitive_gate, copy_input_npin(primitive_gate->input_pins[2]), 3);
+
+			//nmos
+			remap_pin_to_new_node(node->input_pins[0], primitive_gate, 0);
+
+			//pmos
+			nnode_t *ctl_cell = make_not_gate(node, mark);
+			remap_pin_to_new_node(node->input_pins[1], ctl_cell, 0);
+			connect_nodes(ctl_cell, 0, primitive_gate, 1);
+			
+			
+			break;
+		}
+		case NOTIF0:
+		{	
+			oassert(node->num_input_pins == 2);
+			primitive_gate = make_2port_gate(node->type, 1, 1, 1, node, mark);
+
+			/* map the inputs to the mux */
+			nnode_t *not_input = make_not_gate(node, mark);
+			remap_pin_to_new_node(node->input_pins[1], not_input, 0);
+			connect_nodes(not_input, 0, primitive_gate, 1);
+
+			/* map the control to the mux */
+			nnode_t *ctl_cell = make_not_gate(node, mark);
+			remap_pin_to_new_node(node->input_pins[0], ctl_cell, 0);
+			connect_nodes(ctl_cell, 0, primitive_gate, 0);
+			break;
+		}
+		case PMOS:
+		{		
+			oassert(node->num_input_pins == 2);
+			primitive_gate = make_2port_gate(node->type, 1, 1, 1, node, mark);
+
+			/* map the inputs to the mux */
+			remap_pin_to_new_node(node->input_pins[1], primitive_gate, 0);
+
+			/* map the control to the mux */
+			nnode_t *ctl_cell = make_not_gate(node, mark);
+			remap_pin_to_new_node(node->input_pins[0], ctl_cell, 0);
+			connect_nodes(ctl_cell, 0, primitive_gate, 0);
+			break;
+			break;
+		}
+		case NOTIF1:
+		{
+			oassert(node->num_input_pins == 2);
+			primitive_gate = make_2port_gate(node->type, 1, 1, 1, node, mark);
+
+			/* map the inputs to the mux */
+			nnode_t *not_input = make_not_gate(node, mark);
+			remap_pin_to_new_node(node->input_pins[1], not_input, 0);
+			connect_nodes(not_input, 0, primitive_gate, 1);
+
+			/* map the control to the mux */
+			remap_pin_to_new_node(node->input_pins[0], primitive_gate, 0);
+			break;
+		}
+		case NMOS:
+		{
+			oassert(node->num_input_pins == 2);
+			primitive_gate = make_2port_gate(node->type, 1, 1, 1, node, mark);
+
+			remap_pin_to_new_node(node->input_pins[0], primitive_gate, 0);
+			remap_pin_to_new_node(node->input_pins[1], primitive_gate, 1);
+
+			/* now hookup outputs */
+			remap_pin_to_new_node(node->output_pins[0], primitive_gate, 0);
+			break;
+		}
+		default:
+			oassert(false);
+	}
+
+	/* now hookup outputs */
+	remap_pin_to_new_node(node->output_pins[0], primitive_gate, 0);
+}
+
 /*---------------------------------------------------------------------------------------------
  * (function: instantiate_bitwise_reduction )
  * 	Makes 2 input gates to break into bitwise

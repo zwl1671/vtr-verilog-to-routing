@@ -254,61 +254,23 @@ short assign_node_type_from_node_name(char * output_name)
 	for(start = length_string-1; (start >= 0) && (output_name[start] != '^'); start--);
 	for(end   = length_string-1; (end   >= 0) && (output_name[end]   != '~'); end--  );
 
-	if((start >= end) || (end == 0)) return GENERIC;
-
-	// Stores the extracted string
-	char *extracted_string = (char*)vtr::malloc(sizeof(char)*((end-start+2)));
-	int i, j;
-	for(i = start + 1, j = 0; i < end; i++, j++)
+	if((start < end) && (end))
 	{
-		extracted_string[j] = output_name[i];
+		// Stores the extracted string
+		char last = output_name[end];
+		output_name[end] = '\0';
+		std::string extracted_string(&output_name[start+1]);
+		output_name[end] = last;
+
+		for(short i=NO_OP+1; i<LAST_OP; i++)
+		{
+			operation_list op = (operation_list)i;
+			if( std::string(operation_name(op)) == extracted_string )
+				return op;
+		}
 	}
 
-	extracted_string[j]='\0';
-
-	if      (!strcmp(extracted_string,"GT"))             return GT;
-	else if (!strcmp(extracted_string,"LT"))             return LT;
-	else if (!strcmp(extracted_string,"ADDER_FUNC"))     return ADDER_FUNC;
-	else if (!strcmp(extracted_string,"CARRY_FUNC"))     return CARRY_FUNC;
-	else if (!strcmp(extracted_string,"BITWISE_NOT"))    return BITWISE_NOT;
-	else if (!strcmp(extracted_string,"LOGICAL_AND"))    return LOGICAL_AND;
-	else if (!strcmp(extracted_string,"LOGICAL_OR"))     return LOGICAL_OR;
-	else if (!strcmp(extracted_string,"LOGICAL_XOR"))    return LOGICAL_XOR;
-	else if (!strcmp(extracted_string,"LOGICAL_XNOR"))   return LOGICAL_XNOR;
-	else if (!strcmp(extracted_string,"LOGICAL_NAND"))   return LOGICAL_NAND;
-	else if (!strcmp(extracted_string,"LOGICAL_NOR"))    return LOGICAL_NOR;
-	else if (!strcmp(extracted_string,"LOGICAL_EQUAL"))  return LOGICAL_EQUAL;
-	else if (!strcmp(extracted_string,"NOT_EQUAL"))      return NOT_EQUAL;
-	else if (!strcmp(extracted_string,"LOGICAL_NOT"))    return LOGICAL_NOT;
-	else if (!strcmp(extracted_string,"MUX_2"))          return MUX_2;
-	else if (!strcmp(extracted_string,"FF_NODE"))        return FF_NODE;
-	else if (!strcmp(extracted_string,"MULTIPLY"))       return MULTIPLY;
-	else if (!strcmp(extracted_string,"HARD_IP"))        return HARD_IP;
-	else if (!strcmp(extracted_string,"INPUT_NODE"))     return INPUT_NODE;
-	else if (!strcmp(extracted_string,"OUTPUT_NODE"))    return OUTPUT_NODE;
-	else if (!strcmp(extracted_string,"PAD_NODE"))       return PAD_NODE;
-	else if (!strcmp(extracted_string,"CLOCK_NODE"))     return CLOCK_NODE;
-	else if (!strcmp(extracted_string,"GND_NODE"))       return GND_NODE;
-	else if (!strcmp(extracted_string,"VCC_NODE"))       return VCC_NODE;
-	else if (!strcmp(extracted_string,"BITWISE_AND"))    return BITWISE_AND;
-	else if (!strcmp(extracted_string,"BITWISE_NAND"))   return BITWISE_NAND;
-	else if (!strcmp(extracted_string,"BITWISE_NOR"))    return BITWISE_NOR;
-	else if (!strcmp(extracted_string,"BITWISE_XNOR"))   return BITWISE_XNOR;
-	else if (!strcmp(extracted_string,"BITWISE_XOR"))    return BITWISE_XOR;
-	else if (!strcmp(extracted_string,"BITWISE_OR"))     return BITWISE_OR;
-	else if (!strcmp(extracted_string,"BUF_NODE"))       return BUF_NODE;
-	else if (!strcmp(extracted_string,"MULTI_PORT_MUX")) return MULTI_PORT_MUX;
-	else if (!strcmp(extracted_string,"SL"))             return SL;
-	else if (!strcmp(extracted_string,"SR"))             return SR;
-	else if (!strcmp(extracted_string,"CASE_EQUAL"))     return CASE_EQUAL;
-	else if (!strcmp(extracted_string,"CASE_NOT_EQUAL")) return CASE_NOT_EQUAL;
-	else if (!strcmp(extracted_string,"DIVIDE"))         return DIVIDE;
-	else if (!strcmp(extracted_string,"MODULO"))         return MODULO;
-	else if (!strcmp(extracted_string,"GTE"))            return GTE;
-	else if (!strcmp(extracted_string,"LTE"))            return LTE;
-	else if (!strcmp(extracted_string,"ADD"))            return ADD;
-	else if (!strcmp(extracted_string,"MINUS"))          return MINUS;
-	else                                                 return GENERIC;
+	return GENERIC;
 }
 
 /*---------------------------------------------------------------------------------------------

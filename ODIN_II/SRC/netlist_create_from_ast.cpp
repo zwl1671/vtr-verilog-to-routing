@@ -3667,11 +3667,14 @@ signal_list_t *create_gate(ast_node_t* gate, char *instance_name_prefix)
 		    /* process the signal for the input gate */
 		    out_1 = create_output_pin(gate_instance->children[1], instance_name_prefix);
 
+
             for(i = 0; i < gate_instance->num_children - 2; i++) {
-                oassert((in[i] != NULL));
+				if(!in[i])
+					error_message(NETLIST_ERROR, -1, -1, "in[%d] is unexistant for the gate input", i);
             }
 
-            oassert((out_1 != NULL));
+				if(!out_1)
+					error_message(NETLIST_ERROR, -1, -1, "out_1 is unexistant for the gate output", i);
 
 		    /* create the node */
 		    gate_node = allocate_nnode();
@@ -3776,6 +3779,27 @@ signal_list_t *create_operation_node(ast_node_t *op, signal_list_t **input_lists
 			/* Record multiply nodes for netlist optimization */
 			mult_list = insert_in_vptr_list(mult_list, operation_node);
 			break;
+		case CMOS:
+			/* only one input port, two control*/
+			output_port_width = 1;
+			input_port_width = 4;
+			break;
+
+		case PMOS:
+		case NMOS:
+		case NOTIF0:
+		case NOTIF1:
+			/* only one input port, one control*/
+			output_port_width = 1;
+			input_port_width = 2;
+			break;
+
+		case BUF: // buf()
+			/* only one input port*/
+			output_port_width = 1;
+			input_port_width = max_input_port_width;
+			break;
+
 		case BITWISE_AND: // &
 		case BITWISE_OR: // |
 		case BITWISE_NAND: // ~&

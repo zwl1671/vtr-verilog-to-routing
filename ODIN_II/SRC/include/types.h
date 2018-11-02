@@ -42,6 +42,9 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 #define ODIN_STD_BITWIDTH (sizeof(long long)*8)
 
+#define TO_ENUM(op) op
+#define TO_STRING(op) #op
+
 typedef struct config_t_t config_t;
 typedef struct global_args_t_t global_args_t;
 /* new struct for the global arguments of verify_blif function */
@@ -217,138 +220,147 @@ typedef enum
 	UNSIGNED
 } signedness;
 
-typedef enum
-{
-	NO_OP,
-	MULTI_PORT_MUX, // port 1 = control, port 2+ = mux options
-	FF_NODE,
-	BUF_NODE,
-	INPUT_NODE,
-	OUTPUT_NODE,
-	GND_NODE,
-	VCC_NODE,
-	CLOCK_NODE,
-	ADD, // +
-	MINUS, // -
-	BITWISE_NOT, // ~
-	BITWISE_AND, // &
-	BITWISE_OR, // |
-	BITWISE_NAND, // ~&
-	BITWISE_NOR, // ~|
-	BITWISE_XNOR, // ~^
-	BITWISE_XOR, // ^
-	LOGICAL_NOT, // !
-	LOGICAL_OR, // ||
-	LOGICAL_AND, // &&
-	LOGICAL_NAND, // No Symbol
-	LOGICAL_NOR, // No Symbol
-	LOGICAL_XNOR, // No symbol
-	LOGICAL_XOR, // No Symbol
-	MULTIPLY, // *
-	DIVIDE, // /
-	MODULO, // %
-	OP_POW, // **
-	LT, // <
-	GT, // >
-	LOGICAL_EQUAL, // ==
-	NOT_EQUAL, // !=
-	LTE, // <=
-	GTE, // >=
-	SR, // >>
-	SL, // <<
-	CASE_EQUAL, // ===
-	CASE_NOT_EQUAL, // !==
-	ADDER_FUNC,
-	CARRY_FUNC,
-	MUX_2,
-	BLIF_FUNCTION,
-	NETLIST_FUNCTION,
-	MEMORY,
-	PAD_NODE,
-	HARD_IP,
-	GENERIC, /*added for the unknown node type */
-	FULLADDER
-} operation_list;
+#define OP_LIST(_TYP) {\
+	_TYP(NO_OP),\
+	_TYP(MULTI_PORT_MUX),	/* port 1 = control port 2+ = mux options */\
+	_TYP(FF_NODE),\
+	_TYP(BUF_NODE),\
+	_TYP(INPUT_NODE),\
+	_TYP(OUTPUT_NODE),\
+	_TYP(GND_NODE),\
+	_TYP(VCC_NODE),\
+	_TYP(CLOCK_NODE),\
+	_TYP(ADD),	/* + */\
+	_TYP(MINUS),	/* - */\
+	_TYP(BITWISE_NOT), 	/* ~ */\
+	_TYP(BITWISE_AND),	/* & */\
+	_TYP(BITWISE_OR),	/* | */\
+	_TYP(BITWISE_NAND),	/* ~& */\
+	_TYP(BITWISE_NOR),	/* ~| */\
+	_TYP(BITWISE_XNOR),	/* ~^ */\
+	_TYP(BITWISE_XOR),	/* ^ */\
+	_TYP(LOGICAL_NOT),	/* ! */\
+	_TYP(LOGICAL_OR),	/* || */\
+	_TYP(LOGICAL_AND),	/* && */\
+	_TYP(LOGICAL_NAND),	/* No Symbol */\
+	_TYP(LOGICAL_NOR),	/* No Symbol */\
+	_TYP(LOGICAL_XNOR), /* No symbol */\
+	_TYP(LOGICAL_XOR),	/* No Symbol */\
+	_TYP(MULTIPLY),	/* * */\
+	_TYP(DIVIDE),	/* / */\
+	_TYP(MODULO),	/* % */\
+	_TYP(OP_POW),	/* ** */\
+	_TYP(LT), 			/* < */\
+	_TYP(GT), 			/* > */\
+	_TYP(LOGICAL_EQUAL),	/*  == */\
+	_TYP(NOT_EQUAL),	/* != */\
+	_TYP(LTE),	/* <= */\
+	_TYP(GTE),	/* >= */\
+	_TYP(SR),	/* >> */\
+	_TYP(SL),	/* << */\
+	_TYP(CASE_EQUAL),	/* === */\
+	_TYP(CASE_NOT_EQUAL),	/* !== */\
+	_TYP(ADDER_FUNC), \
+	_TYP(CARRY_FUNC), \
+	_TYP(MUX_2),\
+	_TYP(BLIF_FUNCTION),\
+	_TYP(NETLIST_FUNCTION),\
+	_TYP(MEMORY),\
+	_TYP(PAD_NODE),\
+	_TYP(HARD_IP),\
+	_TYP(GENERIC),	/* added for the unknown node type */\
+	_TYP(FULLADDER),\
+	_TYP(CMOS),\
+	_TYP(NMOS),\
+	_TYP(PMOS),\
+	_TYP(NOTIF0),\
+	_TYP(NOTIF1),\
+	_TYP(BUF),\
+	_TYP(LAST_OP)\
+}
+typedef enum OP_LIST(TO_ENUM) operation_list;
 
-typedef enum
-{
-	NO_ID,
-	/* top level things */
-	FILE_ITEMS,
-	MODULE,
-	/* VARIABLES */
-	INPUT,
-	OUTPUT,
-	INOUT,
-	WIRE,
-	REG,
-	INTEGER,
-	PARAMETER,
-	INITIALS,
-	PORT,
-	/* OTHER MODULE ITEMS */
-	MODULE_ITEMS,
-	VAR_DECLARE,
-	VAR_DECLARE_LIST,
-	ASSIGN,
-   	/* OTHER MODULE AND FUNCTION ITEMS */
-	FUNCTION,
-   	/* OTHER FUNCTION ITEMS */
-  	FUNCTION_ITEMS,
-	/* primitives */
-	GATE,
-	GATE_INSTANCE,
-	ONE_GATE_INSTANCE,
-	/* Module instances */
-	MODULE_CONNECT_LIST,
-	MODULE_CONNECT,
-	MODULE_PARAMETER_LIST,
-	MODULE_PARAMETER,
-	MODULE_NAMED_INSTANCE,
-	MODULE_INSTANCE,
-	MODULE_MASTER_INSTANCE,
-	ONE_MODULE_INSTANCE,
-	/* Function instances*/
-	FUNCTION_NAMED_INSTANCE,
-	FUNCTION_INSTANCE,
-	SPECIFY_PAL_CONNECTION_STATEMENT,
-	SPECIFY_PAL_CONNECT_LIST,
-	/* statements */
-	BLOCK,
-	NON_BLOCKING_STATEMENT,
-	BLOCKING_STATEMENT,
-	ASSIGNING_LIST,
-	CASE,
-	CASE_LIST,
-	CASE_ITEM,
-	CASE_DEFAULT,
-	ALWAYS,
-	IF,
-	IF_Q,
-	FOR,
-	WHILE,
-	/* Delay Control */
-	DELAY_CONTROL,
-	POSEDGE,
-	NEGEDGE,
-	/* expressions */
-	BINARY_OPERATION,
-	UNARY_OPERATION,
-	/* basic primitives */
-	ARRAY_REF,
-	RANGE_REF,
-	CONCATENATE,
-	/* basic identifiers */
-	IDENTIFIERS,
-	NUMBERS,
-	/* Hard Blocks */
-	HARD_BLOCK,
-	HARD_BLOCK_NAMED_INSTANCE,
-	HARD_BLOCK_CONNECT_LIST,
-	HARD_BLOCK_CONNECT,
-	// EDDIE: new enum value for ids to replace MEMORY from operation_t
-	RAM
-} ids;
+#define IDS_LIST(_TYP) {\
+	_TYP(NO_ID),\
+	/* top level things */\
+	_TYP(FILE_ITEMS),\
+	_TYP(MODULE),\
+	/* VARIABLES */\
+	_TYP(INPUT),\
+	_TYP(OUTPUT),\
+	_TYP(INOUT),\
+	_TYP(WIRE),\
+	_TYP(REG),\
+	_TYP(INTEGER),\
+	_TYP(PARAMETER),\
+	_TYP(INITIALS),\
+	_TYP(PORT),\
+	/* OTHER MODULE ITEMS */\
+	_TYP(MODULE_ITEMS),\
+	_TYP(VAR_DECLARE),\
+	_TYP(VAR_DECLARE_LIST),\
+	_TYP(ASSIGN),\
+   	/* OTHER MODULE AND FUNCTION ITEMS */\
+	_TYP(FUNCTION),\
+   	/* OTHER FUNCTION ITEMS */\
+	_TYP(FUNCTION_ITEMS),\
+	/* primitives */\
+	_TYP(GATE),\
+	_TYP(GATE_INSTANCE),\
+	_TYP(ONE_GATE_INSTANCE),\
+	/* Module instances */\
+	_TYP(MODULE_CONNECT_LIST),\
+	_TYP(MODULE_CONNECT),\
+	_TYP(MODULE_PARAMETER_LIST),\
+	_TYP(MODULE_PARAMETER),\
+	_TYP(MODULE_NAMED_INSTANCE),\
+	_TYP(MODULE_INSTANCE),\
+	_TYP(MODULE_MASTER_INSTANCE),\
+	_TYP(ONE_MODULE_INSTANCE),\
+	/* Function instances*/\
+	_TYP(FUNCTION_NAMED_INSTANCE),\
+	_TYP(FUNCTION_INSTANCE),\
+	_TYP(SPECIFY_PAL_CONNECTION_STATEMENT),\
+	_TYP(SPECIFY_PAL_CONNECT_LIST),\
+	/* statements */\
+	_TYP(BLOCK),\
+	_TYP(NON_BLOCKING_STATEMENT),\
+	_TYP(BLOCKING_STATEMENT),\
+	_TYP(ASSIGNING_LIST),\
+	_TYP(CASE),\
+	_TYP(CASE_LIST),\
+	_TYP(CASE_ITEM),\
+	_TYP(CASE_DEFAULT),\
+	_TYP(ALWAYS),\
+	_TYP(IF),\
+	_TYP(IF_Q),\
+	_TYP(FOR),\
+	_TYP(WHILE),\
+	/* Delay Control */\
+	_TYP(DELAY_CONTROL),\
+	_TYP(POSEDGE),\
+	_TYP(NEGEDGE),\
+	/* expressions */\
+	_TYP(BINARY_OPERATION),\
+	_TYP(UNARY_OPERATION),\
+	/* basic primitives */\
+	_TYP(ARRAY_REF),\
+	_TYP(RANGE_REF),\
+	_TYP(CONCATENATE),\
+	/* basic identifiers */\
+	_TYP(IDENTIFIERS),\
+	_TYP(NUMBERS),\
+	/* Hard Blocks */\
+	_TYP(HARD_BLOCK),\
+	_TYP(HARD_BLOCK_NAMED_INSTANCE),\
+	_TYP(HARD_BLOCK_CONNECT_LIST),\
+	_TYP(HARD_BLOCK_CONNECT),\
+	/* EDDIE: new enum value for ids to replace MEMORY from operation_t */\
+	_TYP(RAM),\
+	_TYP(LAST_ID)\
+}
+typedef enum IDS_LIST(TO_ENUM) ids;
+
 
 struct typ_t
 {

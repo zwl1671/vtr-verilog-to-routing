@@ -1329,8 +1329,11 @@ ast_node_t *newFunctionInstance(char* function_ref_name, ast_node_t *function_na
 /*---------------------------------------------------------------------------------------------
  * (function: newGateInstance)
  *-------------------------------------------------------------------------------------------*/
-ast_node_t *newGateInstance(char* gate_instance_name, ast_node_t *expression1, ast_node_t *expression2, ast_node_t *expression3, int line_number)
+ast_node_t *newGateInstance(char* gate_instance_name, std::vector<ast_node_t *>expressions, int line_number)
 {
+	if(expressions.size() < 2)
+		error_message(PARSE_ERROR, line_number, current_parse_file, "not enough input to drive the gate");
+
 	/* create a node for this array reference */
 	ast_node_t* new_node = create_node_w_type(GATE_INSTANCE, line_number, current_parse_file);
 	ast_node_t *symbol_node = NULL;
@@ -1341,8 +1344,8 @@ ast_node_t *newGateInstance(char* gate_instance_name, ast_node_t *expression1, a
 	}
 
 	char *newChar;
-	newChar = (char *)vtr::calloc(strlen(expression1->types.identifier)+10,sizeof(char));
-	strcpy(newChar,expression1->types.identifier);
+	newChar = (char *)vtr::calloc(strlen(expressions[0]->types.identifier)+10,sizeof(char));
+	strcpy(newChar,expressions[0]->types.identifier);
 	ast_node_t *newVar = newVarDeclare(newChar, NULL, NULL, NULL, NULL, NULL, line_number);
 	ast_node_t *newVarList = newList(VAR_DECLARE_LIST, newVar);
 	ast_node_t *newVarMaked = markAndProcessSymbolListWith(MODULE,WIRE, newVarList);
@@ -1355,8 +1358,15 @@ ast_node_t *newGateInstance(char* gate_instance_name, ast_node_t *expression1, a
 	module_variables_not_defined[size_module_variables_not_defined] = newVarMaked;
 	size_module_variables_not_defined++;
 	/* allocate child nodes to this node */
-	allocate_children_to_node(new_node, 4, symbol_node, expression1, expression2, expression3);
-
+	if(expressions.size() == 2)
+		allocate_children_to_node(new_node, 1 + expressions.size(), symbol_node, expressions[0], expressions[1]);
+	else if(expressions.size() == 3)
+		allocate_children_to_node(new_node, 1 + expressions.size(), symbol_node, expressions[0], expressions[1], expressions[2]);
+	else if(expressions.size() == 4)
+		allocate_children_to_node(new_node, 1 + expressions.size(), symbol_node, expressions[0], expressions[1], expressions[2], expressions[3]);
+	else
+		error_message(PARSE_ERROR, line_number, current_parse_file, "too many input to drive the gate");
+	
 	return new_node;
 }
 
@@ -1780,288 +1790,35 @@ void graphVizOutputAst_traverse_node(FILE *fp, ast_node_t *node, ast_node_t *fro
 	/* increase the unique count for other nodes since ours is recorded */
 	unique_label_count++;
 
-	if (node == NULL)
-	{
-		/* print out the node and label details */
-	}
-	else
-	{
-		switch(node->type)
-		{
-			case FILE_ITEMS:
-				fprintf(fp, "\t%d [label=\"FILE_ITEMS\"];\n", my_label);
-				break;
-			case MODULE:
-				fprintf(fp, "\t%d [label=\"MODULE\"];\n", my_label);
-				break;
-			case MODULE_ITEMS:
-				fprintf(fp, "\t%d [label=\"MODULE_ITEMS\"];\n", my_label);
-				break;
-			case VAR_DECLARE:
-				{
-					std::stringstream temp;
-					if(node->types.variable.is_input)		temp << " INPUT";
-					if(node->types.variable.is_output)		temp << " OUTPUT";
-					if(node->types.variable.is_inout)		temp << " INOUT";
-					if(node->types.variable.is_port)		temp << " PORT";
-					if(node->types.variable.is_parameter)	temp << " PARAMETER";
-					if(node->types.variable.is_wire)		temp << " WIRE";
-					if(node->types.variable.is_reg)			temp << " REG";
-
-					fprintf(fp, "\t%d [label=\"VAR_DECLARE %s\"];\n", my_label, temp.str().c_str());
-				}
-				break;
-			case VAR_DECLARE_LIST:
-				fprintf(fp, "\t%d [label=\"VAR_DECLARE_LIST\"];\n", my_label);
-				break;
-			case ASSIGN:
-				fprintf(fp, "\t%d [label=\"ASSIGN\"];\n", my_label);
-				break;
-			case GATE:
-				fprintf(fp, "\t%d [label=\"GATE\"];\n", my_label);
-				break;
-			case GATE_INSTANCE:
-				fprintf(fp, "\t%d [label=\"GATE_INSTANCE\"];\n", my_label);
-				break;
-			case ONE_GATE_INSTANCE:
-				fprintf(fp, "\t%d [label=\"ONE_GATE_INSTANCE\"];\n", my_label);
-				break;
-			case MODULE_CONNECT_LIST:
-				fprintf(fp, "\t%d [label=\"MODULE_CONNECT_LIST\"];\n", my_label);
-				break;
-			case MODULE_CONNECT:
-				fprintf(fp, "\t%d [label=\"MODULE_CONNECT\"];\n", my_label);
-				break;
-			case MODULE_PARAMETER_LIST:
-				fprintf(fp, "\t%d [label=\"MODULE_PARAMETER_LIST\"];\n", my_label);
-				break;
-			case MODULE_PARAMETER:
-				fprintf(fp, "\t%d [label=\"MODULE_PARAMETER\"];\n", my_label);
-				break;
-			case MODULE_NAMED_INSTANCE:
-				fprintf(fp, "\t%d [label=\"MODULE_NAMED_INSTANCE\"];\n", my_label);
-				break;
-			case MODULE_INSTANCE:
-				fprintf(fp, "\t%d [label=\"MODULE_INSTANCE\"];\n", my_label);
-				break;
-			case HARD_BLOCK:
-				fprintf(fp, "\t%d [label=\"HARD_BLOCK\"];\n", my_label);
-				break;
-			case HARD_BLOCK_NAMED_INSTANCE:
-				fprintf(fp, "\t%d [label=\"HARD_BLOCK_NAMED_INSTANCE\"];\n", my_label);
-				break;
-			case HARD_BLOCK_CONNECT:
-				fprintf(fp, "\t%d [label=\"HARD_BLOCK_CONNECT\"];\n", my_label);
-				break;
-			case HARD_BLOCK_CONNECT_LIST:
-				fprintf(fp, "\t%d [label=\"HARD_BLOCK_CONNECT_LIST\"];\n", my_label);
-				break;
-			case BLOCK:
-				fprintf(fp, "\t%d [label=\"BLOCK\"];\n", my_label);
-				break;
-			case NON_BLOCKING_STATEMENT:
-				fprintf(fp, "\t%d [label=\"NON_BLOCKING_STATEMENT\"];\n", my_label);
-				break;
-			case BLOCKING_STATEMENT:
-				fprintf(fp, "\t%d [label=\"BLOCKING_STATEMENT\"];\n", my_label);
-				break;
-			case CASE:
-				fprintf(fp, "\t%d [label=\"CASE\"];\n", my_label);
-				break;
-			case CASE_LIST:
-				fprintf(fp, "\t%d [label=\"CASE_LIST\"];\n", my_label);
-				break;
-			case CASE_ITEM:
-				fprintf(fp, "\t%d [label=\"CASE_ITEM\"];\n", my_label);
-				break;
-			case CASE_DEFAULT:
-				fprintf(fp, "\t%d [label=\"CASE_DEFAULT\"];\n", my_label);
-				break;
-			case ALWAYS:
-				fprintf(fp, "\t%d [label=\"ALWAYS\"];\n", my_label);
-				break;
-			case DELAY_CONTROL:
-				fprintf(fp, "\t%d [label=\"DELAY_CONTROL\"];\n", my_label);
-				break;
-			case POSEDGE:
-				fprintf(fp, "\t%d [label=\"POSEDGE\"];\n", my_label);
-				break;
-			case NEGEDGE:
-				fprintf(fp, "\t%d [label=\"NEGEDGE\"];\n", my_label);
-				break;
-			case WHILE:
-				fprintf(fp, "\t%d [label=\"WHILE\"];\n", my_label);
-				break;
-			case FOR:
-				fprintf(fp, "\t%d [label=\"FOR\"];\n", my_label);
-				break;
-			case IF:
-				fprintf(fp, "\t%d [label=\"IF\"];\n", my_label);
-				break;
-			case IF_Q:
-				fprintf(fp, "\t%d [label=\"IF_Q\"];\n", my_label);
-				break;
-			case BINARY_OPERATION:
-				switch (node->types.operation.op)
-				{
-					case ADD:
-						fprintf(fp, "\t%d [label=\"BINARY_OPERATION ADD\"];\n", my_label);
-						break;
-					case MINUS:
-						fprintf(fp, "\t%d [label=\"BINARY_OPERATION MINUS\"];\n", my_label);
-						break;
-					case BITWISE_NOT:
-						fprintf(fp, "\t%d [label=\"BINARY_OPERATION BITWISE_NOT\"];\n", my_label);
-						break;
-					case BITWISE_AND:
-						fprintf(fp, "\t%d [label=\"BINARY_OPERATION BITWISE_AND\"];\n", my_label);
-						break;
-					case BITWISE_OR:
-						fprintf(fp, "\t%d [label=\"BINARY_OPERATION BITWISE_OR\"];\n", my_label);
-						break;
-					case BITWISE_NAND:
-						fprintf(fp, "\t%d [label=\"BINARY_OPERATION BITWISE_NAND\"];\n", my_label);
-						break;
-					case BITWISE_NOR:
-						fprintf(fp, "\t%d [label=\"BINARY_OPERATION BITWISE_NOR\"];\n", my_label);
-						break;
-					case BITWISE_XNOR:
-						fprintf(fp, "\t%d [label=\"BINARY_OPERATION BITWISE_XNOR\"];\n", my_label);
-						break;
-					case BITWISE_XOR:
-						fprintf(fp, "\t%d [label=\"BINARY_OPERATION BITWISE_XOR\"];\n", my_label);
-						break;
-					case LOGICAL_NOT:
-						fprintf(fp, "\t%d [label=\"BINARY_OPERATION LOGICAL_NOT\"];\n", my_label);
-						break;
-					case LOGICAL_OR:
-						fprintf(fp, "\t%d [label=\"BINARY_OPERATION LOGICAL_OR\"];\n", my_label);
-						break;
-					case LOGICAL_AND:
-						fprintf(fp, "\t%d [label=\"BINARY_OPERATION LOGICAL_AND\"];\n", my_label);
-						break;
-					case MULTIPLY:
-						fprintf(fp, "\t%d [label=\"BINARY_OPERATION MULTIPLY\"];\n", my_label);
-						break;
-					case DIVIDE:
-						fprintf(fp, "\t%d [label=\"BINARY_OPERATION DIVIDE\"];\n", my_label);
-						break;
-					case MODULO:
-						fprintf(fp, "\t%d [label=\"BINARY_OPERATION MODULO\"];\n", my_label);
-						break;
-					case LT:
-						fprintf(fp, "\t%d [label=\"BINARY_OPERATION LT\"];\n", my_label);
-						break;
-					case GT:
-						fprintf(fp, "\t%d [label=\"BINARY_OPERATION GT\"];\n", my_label);
-						break;
-					case LOGICAL_EQUAL:
-						fprintf(fp, "\t%d [label=\"BINARY_OPERATION LOGICAL_EQUAL\"];\n", my_label);
-						break;
-					case NOT_EQUAL:
-						fprintf(fp, "\t%d [label=\"BINARY_OPERATION NOT_EQUAL\"];\n", my_label);
-						break;
-					case LTE:
-						fprintf(fp, "\t%d [label=\"BINARY_OPERATION LTE\"];\n", my_label);
-						break;
-					case GTE:
-						fprintf(fp, "\t%d [label=\"BINARY_OPERATION GTE\"];\n", my_label);
-						break;
-					case SR:
-						fprintf(fp, "\t%d [label=\"BINARY_OPERATION SR\"];\n", my_label);
-						break;
-					case SL:
-						fprintf(fp, "\t%d [label=\"BINARY_OPERATION SL\"];\n", my_label);
-						break;
-					case CASE_EQUAL:
-						fprintf(fp, "\t%d [label=\"BINARY_OPERATION CASE_EQUAL\"];\n", my_label);
-						break;
-					case CASE_NOT_EQUAL:
-						fprintf(fp, "\t%d [label=\"BINARY_OPERATION\"];\n", my_label);
-						break;
-					default:
-						break;
-				}
-				break;
-			case UNARY_OPERATION:
-				switch (node->types.operation.op)
-				{
-					case ADD:
-						fprintf(fp, "\t%d [label=\"UNARY_OPERATION ADD\"];\n", my_label);
-						break;
-					case MINUS:
-						fprintf(fp, "\t%d [label=\"UNARY_OPERATION MINUS\"];\n", my_label);
-						break;
-					case BITWISE_NOT:
-						fprintf(fp, "\t%d [label=\"UNARY_OPERATION BITWISE_NOT\"];\n", my_label);
-						break;
-					case BITWISE_AND:
-						fprintf(fp, "\t%d [label=\"UNARY_OPERATION BITWISE_AND\"];\n", my_label);
-						break;
-					case BITWISE_OR:
-						fprintf(fp, "\t%d [label=\"UNARY_OPERATION BITWISE_OR\"];\n", my_label);
-						break;
-					case BITWISE_NAND:
-						fprintf(fp, "\t%d [label=\"UNARY_OPERATION BITWISE_NAND\"];\n", my_label);
-						break;
-					case BITWISE_NOR:
-						fprintf(fp, "\t%d [label=\"UNARY_OPERATION BITWISE_NOR\"];\n", my_label);
-						break;
-					case BITWISE_XNOR:
-						fprintf(fp, "\t%d [label=\"UNARY_OPERATION BITWISE_XNOR\"];\n", my_label);
-						break;
-					case BITWISE_XOR:
-						fprintf(fp, "\t%d [label=\"UNARY_OPERATION BITWISE_XOR\"];\n", my_label);
-						break;
-					case LOGICAL_NOT:
-						fprintf(fp, "\t%d [label=\"UNARY_OPERATION LOGICAL_NOT\"];\n", my_label);
-						break;
-					default:
-						break;
-				}
-				break;
-			case ARRAY_REF:
-				fprintf(fp, "\t%d [label=\"ARRAY_REF\"];\n", my_label);
-				break;
-			case RANGE_REF:
-				fprintf(fp, "\t%d [label=\"RANGE_REF\"];\n", my_label);
-				break;
-			case CONCATENATE:
-				fprintf(fp, "\t%d [label=\"CONCATENATE\"];\n", my_label);
-				break;
-			case IDENTIFIERS:
-				fprintf(fp, "\t%d [label=\"IDENTIFIERS:%s\"];\n", my_label, node->types.identifier);
-				break;
-			case NUMBERS:
-				switch (node->types.number.base)
-				{
-					case(DEC):
-						fprintf(fp, "\t%d [label=\"NUMBERS DEC:%s\"];\n", my_label, node->types.number.number);
-						break;
-					case(HEX):
-						fprintf(fp, "\t%d [label=\"NUMBERS HEX:%s\"];\n", my_label, node->types.number.number);
-						break;
-					case(OCT):
-						fprintf(fp, "\t%d [label=\"NUMBERS OCT:%s\"];\n", my_label, node->types.number.number);
-						break;
-					case(BIN):
-						fprintf(fp, "\t%d [label=\"NUMBERS BIN:%s\"];\n", my_label, node->types.number.number);
-						break;
-					case(LONG_LONG):
-						fprintf(fp, "\t%d [label=\"NUMBERS LONG_LONG:%lld\"];\n", my_label, node->types.number.value);
-						break;
-                    default:
-                        oassert(FALSE);
-                        break;
-				}
-				break;
-			default:
-				oassert(FALSE);
-		}
-	}
-
 	if (node != NULL)
 	{
+		fprintf(fp, "\t%d [label=\"%s", my_label, ids_name(node->type));
+
+		if(node->type == VAR_DECLARE)
+		{
+			if(node->types.variable.is_input)		fprintf(fp, " %s", "INPUT");
+			if(node->types.variable.is_output)		fprintf(fp, " %s", "OUTPUT");
+			if(node->types.variable.is_inout)		fprintf(fp, " %s", "INOUT");
+			if(node->types.variable.is_port)		fprintf(fp, " %s", "PORT");
+			if(node->types.variable.is_parameter)	fprintf(fp, " %s", "PARAMETER");
+			if(node->types.variable.is_wire)		fprintf(fp, " %s", "WIRE");
+			if(node->types.variable.is_reg)			fprintf(fp, " %s", "REG");
+		}
+		else if(node->type == BINARY_OPERATION || node->type == UNARY_OPERATION )
+		{
+			fprintf(fp, " %s", operation_name(node->types.operation.op));
+
+		}
+		else if(node->type == IDENTIFIERS)
+		{
+			fprintf(fp, ":%s", node->types.identifier);
+		}
+		else if(node->type == NUMBERS)
+		{
+			fprintf(fp, " (%lld) %d\'b%s", node->types.number.value, node->types.number.binary_size , node->types.number.binary_string);
+		}
+		fprintf(fp, "\"];\n");
+
 		/* print out the connection with the previous node */
 		if (from != NULL)
 			fprintf(fp, "\t%d -> %d;\n", from_num, my_label);

@@ -1,3 +1,7 @@
+// bramctrlsimple module is initialized with the parameter immediatly than the input wires are connected,
+// this is the wrong behavior and result in failure to simulate
+// need to reorder.. find top module first then instantiate sub module ?
+
 `define BITS 3
 `define MEMORY_WORDS 11
 `define MEM_ACCES_BIT_SIZE 4

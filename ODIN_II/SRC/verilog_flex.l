@@ -75,7 +75,6 @@ char* standardize_number(const char* input);
 <INITIAL>"nand"				{ MP; return vNAND;}
 <INITIAL>"negedge"			{ MP; return vNEGEDGE;}
 <INITIAL>"nor"				{ MP; return vNOR;}
-<INITIAL>"not"				{ MP; return vNOT;}
 <INITIAL>"or"				{ MP; return vOR;}
 <INITIAL>"output"			{ MP; return vOUTPUT;}
 <INITIAL>"parameter"		{ MP; return vPARAMETER;}
@@ -88,9 +87,22 @@ char* standardize_number(const char* input);
 <INITIAL>"xnor"				{ MP; return vXNOR;}
 <INITIAL>"xor"				{ MP; return vXOR;}
 
+	/* gate level modeling keywords */
+<INITIAL>"cmos"				{ MP; return vCMOS;}
+<INITIAL>"rcmos"			{ MP; return vCMOS;}
+<INITIAL>"nmos"				{ MP; return vNMOS;}
+<INITIAL>"rnmos"			{ MP; return vNMOS;}
+<INITIAL>"pmos"				{ MP; return vPMOS;}
+<INITIAL>"rpmos"			{ MP; return vPMOS;}
+<INITIAL>"buf"				{ MP; return vBUF;}
+<INITIAL>"bufif0"			{ MP; return vPMOS;}
+<INITIAL>"bufif1"			{ MP; return vNMOS;}
+<INITIAL>"not"				{ MP; return vNOT;}
+<INITIAL>"notif0"			{ MP; return vNOTIF0;}
+<INITIAL>"notif1"			{ MP; return vNOTIF1;}
+
 	/*	unsupported Keywords	*/
 <INITIAL>"automatic"		{ MP; return vNOT_SUPPORT;}
-<INITIAL>"buf"				{ MP; return vNOT_SUPPORT;}
 <INITIAL>"casex"			{ MP; return vNOT_SUPPORT;}
 <INITIAL>"casez"			{ MP; return vNOT_SUPPORT;}
 <INITIAL>"disable"			{ MP; return vNOT_SUPPORT;}
@@ -99,9 +111,6 @@ char* standardize_number(const char* input);
 <INITIAL>"macromodule"		{ MP; return vNOT_SUPPORT;}
 <INITIAL>"scalared"			{ MP; return vNOT_SUPPORT;}
 <INITIAL>"specparam"		{ MP; return vNOT_SUPPORT;}
-<INITIAL>"bufif0"			{ MP; return vNOT_SUPPORT;}
-<INITIAL>"bufif1"			{ MP; return vNOT_SUPPORT;}
-<INITIAL>"cmos"				{ MP; return vNOT_SUPPORT;}
 <INITIAL>"deassign"			{ MP; return vNOT_SUPPORT;}
 <INITIAL>"endprimitive"		{ MP; return vNOT_SUPPORT;}
 <INITIAL>"endtable"			{ MP; return vNOT_SUPPORT;}
@@ -114,23 +123,13 @@ char* standardize_number(const char* input);
 <INITIAL>"join"				{ MP; return vNOT_SUPPORT;}
 <INITIAL>"large"			{ MP; return vNOT_SUPPORT;}
 <INITIAL>"medium"			{ MP; return vNOT_SUPPORT;}
-<INITIAL>"nmos"				{ MP; return vNOT_SUPPORT;}
-<INITIAL>"notif0"			{ MP; return vNOT_SUPPORT;}
-<INITIAL>"notif1"			{ MP; return vNOT_SUPPORT;}
-<INITIAL>"pmos"				{ MP; return vNOT_SUPPORT;}
 <INITIAL>"primitive"		{ MP; return vNOT_SUPPORT;}
 <INITIAL>"pull0"			{ MP; return vNOT_SUPPORT;}
 <INITIAL>"pull1"			{ MP; return vNOT_SUPPORT;}
 <INITIAL>"pulldown"			{ MP; return vNOT_SUPPORT;}
 <INITIAL>"pullup"			{ MP; return vNOT_SUPPORT;}
-<INITIAL>"rcmos"			{ MP; return vNOT_SUPPORT;}
 <INITIAL>"release"			{ MP; return vNOT_SUPPORT;}
 <INITIAL>"repeat"			{ MP; return vNOT_SUPPORT;}
-<INITIAL>"rnmos"			{ MP; return vNOT_SUPPORT;}
-<INITIAL>"rpmos"			{ MP; return vNOT_SUPPORT;}
-<INITIAL>"rtran"			{ MP; return vNOT_SUPPORT;}
-<INITIAL>"rtranif0"			{ MP; return vNOT_SUPPORT;}
-<INITIAL>"rtranif1"			{ MP; return vNOT_SUPPORT;}
 <INITIAL>"small"			{ MP; return vNOT_SUPPORT;}
 <INITIAL>"signed"			{ MP; return vNOT_SUPPORT;}
 <INITIAL>"strong0"			{ MP; return vNOT_SUPPORT;}
@@ -140,9 +139,6 @@ char* standardize_number(const char* input);
 <INITIAL>"table"			{ MP; return vNOT_SUPPORT;}
 <INITIAL>"task"				{ MP; return vNOT_SUPPORT;}
 <INITIAL>"time"				{ MP; return vNOT_SUPPORT;}
-<INITIAL>"tran"				{ MP; return vNOT_SUPPORT;}
-<INITIAL>"tranif0"			{ MP; return vNOT_SUPPORT;}
-<INITIAL>"tranif1"			{ MP; return vNOT_SUPPORT;}
 <INITIAL>"tri"				{ MP; return vNOT_SUPPORT;}
 <INITIAL>"tri0"				{ MP; return vNOT_SUPPORT;}
 <INITIAL>"tri1"				{ MP; return vNOT_SUPPORT;}
@@ -154,6 +150,14 @@ char* standardize_number(const char* input);
 <INITIAL>"weak0"			{ MP; return vNOT_SUPPORT;}
 <INITIAL>"weak1"			{ MP; return vNOT_SUPPORT;}
 <INITIAL>"wor"				{ MP; return vNOT_SUPPORT;}
+
+	/* bi-directional primitive gates */
+<INITIAL>"tran"				{ MP; return vNOT_SUPPORT;}
+<INITIAL>"tranif0"			{ MP; return vNOT_SUPPORT;}
+<INITIAL>"tranif1"			{ MP; return vNOT_SUPPORT;}
+<INITIAL>"rtran"			{ MP; return vNOT_SUPPORT;}
+<INITIAL>"rtranif0"			{ MP; return vNOT_SUPPORT;}
+<INITIAL>"rtranif1"			{ MP; return vNOT_SUPPORT;}
 
 
 	/* Operators */

@@ -225,6 +225,8 @@ void record_expression(ast_node_t *node, std::vector<std::string> expressions, b
 					break;
 
 				case BINARY_OPERATION:
+					//TODO: use the op name to match bellow, and use the existing function
+					// to resolve binary as it simplifies work.
 					switch(node->types.operation.op)
 					{
 						case ADD:

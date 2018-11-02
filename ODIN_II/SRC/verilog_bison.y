@@ -65,6 +65,7 @@ int yylex(void);
 %token vOUTPUT vPARAMETER vPOSEDGE vREG vWIRE vXNOR vXOR vDEFPARAM voANDAND
 %token voOROR voLTE voGTE voPAL voSLEFT voSRIGHT voEQUAL voNOTEQUAL voCASEEQUAL
 %token voCASENOTEQUAL voXNOR voNAND voNOR vWHILE vINTEGER
+%token vCMOS vNMOS vPMOS vBUF vNOTIF0 vNOTIF1
 %token vNOT_SUPPORT
 %token '?' ':' '|' '^' '&' '<' '>' '+' '-' '*' '/' '%' '(' ')' '{' '}' '[' ']'
 
@@ -105,8 +106,8 @@ int yylex(void);
 %type <node> integer_type_variable_list variable integer_type_variable
 %type <node> net_declaration integer_declaration function_instantiation
 %type <node> continuous_assign multiple_inputs_gate_instance list_of_single_input_gate_declaration_instance
-%type <node> list_of_multiple_inputs_gate_declaration_instance list_of_module_instance
-%type <node> gate_declaration single_input_gate_instance
+%type <node> list_of_multiple_inputs_gate_declaration_instance list_of_module_instance bicontroled_input_gate_instance controled_input_gate_instance
+%type <node> gate_declaration single_input_gate_instance 
 %type <node> module_instantiation module_instance function_instance list_of_module_connections list_of_function_connections
 %type <node> list_of_multiple_inputs_gate_connections
 %type <node> module_connection always statement function_statement blocking_assignment
@@ -131,15 +132,15 @@ items:
 	;
 
 define:
-	vDEFINE vSYMBOL_ID vINTEGRAL				             {$$ = NULL; newConstant($2, newNumberNode($3, LONG_LONG, UNSIGNED, yylineno), yylineno);}
-  | vDEFINE vSYMBOL_ID vUNSIGNED_DECIMAL				   {$$ = NULL; newConstant($2, newNumberNode($3, DEC, UNSIGNED, yylineno), yylineno);}
-  | vDEFINE vSYMBOL_ID vUNSIGNED_OCTAL				     {$$ = NULL; newConstant($2, newNumberNode($3, OCT, UNSIGNED, yylineno), yylineno);}
-  | vDEFINE vSYMBOL_ID vUNSIGNED_HEXADECIMAL			 {$$ = NULL; newConstant($2, newNumberNode($3, HEX, UNSIGNED, yylineno), yylineno);}
-  | vDEFINE vSYMBOL_ID vUNSIGNED_BINARY				     {$$ = NULL; newConstant($2, newNumberNode($3, BIN, UNSIGNED, yylineno), yylineno);}
-  | vDEFINE vSYMBOL_ID vSIGNED_DECIMAL				   {$$ = NULL; newConstant($2, newNumberNode($3, DEC, SIGNED, yylineno), yylineno);}
-  | vDEFINE vSYMBOL_ID vSIGNED_OCTAL				     {$$ = NULL; newConstant($2, newNumberNode($3, OCT, SIGNED, yylineno), yylineno);}
-  | vDEFINE vSYMBOL_ID vSIGNED_HEXADECIMAL			 {$$ = NULL; newConstant($2, newNumberNode($3, HEX, SIGNED, yylineno), yylineno);}
-  | vDEFINE vSYMBOL_ID vSIGNED_BINARY				     {$$ = NULL; newConstant($2, newNumberNode($3, BIN, SIGNED, yylineno), yylineno);}
+	vDEFINE vSYMBOL_ID vINTEGRAL							{$$ = NULL; newConstant($2, newNumberNode($3, LONG_LONG, UNSIGNED, yylineno), yylineno);}
+	| vDEFINE vSYMBOL_ID vUNSIGNED_DECIMAL					{$$ = NULL; newConstant($2, newNumberNode($3, DEC, UNSIGNED, yylineno), yylineno);}
+	| vDEFINE vSYMBOL_ID vUNSIGNED_OCTAL					{$$ = NULL; newConstant($2, newNumberNode($3, OCT, UNSIGNED, yylineno), yylineno);}
+	| vDEFINE vSYMBOL_ID vUNSIGNED_HEXADECIMAL				{$$ = NULL; newConstant($2, newNumberNode($3, HEX, UNSIGNED, yylineno), yylineno);}
+	| vDEFINE vSYMBOL_ID vUNSIGNED_BINARY					{$$ = NULL; newConstant($2, newNumberNode($3, BIN, UNSIGNED, yylineno), yylineno);}
+	| vDEFINE vSYMBOL_ID vSIGNED_DECIMAL					{$$ = NULL; newConstant($2, newNumberNode($3, DEC, SIGNED, yylineno), yylineno);}
+	| vDEFINE vSYMBOL_ID vSIGNED_OCTAL						{$$ = NULL; newConstant($2, newNumberNode($3, OCT, SIGNED, yylineno), yylineno);}
+	| vDEFINE vSYMBOL_ID vSIGNED_HEXADECIMAL				{$$ = NULL; newConstant($2, newNumberNode($3, HEX, SIGNED, yylineno), yylineno);}
+	| vDEFINE vSYMBOL_ID vSIGNED_BINARY						{$$ = NULL; newConstant($2, newNumberNode($3, BIN, SIGNED, yylineno), yylineno);}
 	;
 
 
@@ -149,7 +150,6 @@ module:
 	| vMODULE vSYMBOL_ID '(' ')' ';' list_of_module_items vENDMODULE								{$$ = newModule($2, NULL, $6, yylineno);}
 	;
 
-//TODO expand this to support INPUT OUTPUT INOUT
 variable_define_list:
 	variable_define_list ',' vSYMBOL_ID													{$$ = newList_entry($1, newVarDeclare($3, NULL, NULL, NULL, NULL, NULL, yylineno));}
 	| vSYMBOL_ID																		{$$ = newList(VAR_DECLARE_LIST, newVarDeclare($1, NULL, NULL, NULL, NULL, NULL, yylineno));}
@@ -267,74 +267,90 @@ variable:
 	;
 
 integer_type_variable:
-	vSYMBOL_ID														{$$ = newIntegerTypeVarDeclare($1, NULL, NULL, NULL, NULL, NULL, yylineno);}
-//	| '[' expression ':' expression ']' vSYMBOL_ID					{$$ = newVarDeclare($6, $2, $4, NULL, NULL, NULL, yylineno); printf("%s", $6);}
-	| vSYMBOL_ID '[' expression ':' expression ']'					{$$ = newIntegerTypeVarDeclare($1, NULL, NULL, $3, $5, NULL, yylineno);}
-//  | vSYMBOL_ID '[' expression ':' expression ']' '=' primary		{$$ = newVarDeclare($6, $2, $4, $8, $10, NULL, yylineno);}
-//	| '[' expression ':' expression ']' vSYMBOL_ID '=' primary		{$$ = newVarDeclare($6, $2, $4, NULL, NULL, $8, yylineno);} // ONLY FOR PARAMETER
-	| vSYMBOL_ID '=' primary		 								{$$ = newIntegerTypeVarDeclare($1, NULL, NULL, NULL, NULL, $3, yylineno);} // ONLY FOR PARAMETER
+	vSYMBOL_ID																			{$$ = newIntegerTypeVarDeclare($1, NULL, NULL, NULL, NULL, NULL, yylineno);}
+//	| '[' expression ':' expression ']' vSYMBOL_ID										{$$ = newVarDeclare($6, $2, $4, NULL, NULL, NULL, yylineno); printf("%s", $6);}
+	| vSYMBOL_ID '[' expression ':' expression ']'										{$$ = newIntegerTypeVarDeclare($1, NULL, NULL, $3, $5, NULL, yylineno);}
+//  | vSYMBOL_ID '[' expression ':' expression ']' '=' primary							{$$ = newVarDeclare($6, $2, $4, $8, $10, NULL, yylineno);}
+//	| '[' expression ':' expression ']' vSYMBOL_ID '=' primary							{$$ = newVarDeclare($6, $2, $4, NULL, NULL, $8, yylineno);} // ONLY FOR PARAMETER
+	| vSYMBOL_ID '=' primary		 													{$$ = newIntegerTypeVarDeclare($1, NULL, NULL, NULL, NULL, $3, yylineno);} // ONLY FOR PARAMETER
 	;
 
 continuous_assign:
-	vASSIGN list_of_blocking_assignment ';'							{$$ = $2;}
+	vASSIGN list_of_blocking_assignment ';'												{$$ = $2;}
 	;
 
 list_of_blocking_assignment:
-	list_of_blocking_assignment ',' blocking_assignment 			{$$ = newList_entry($1, $3);}
-    |blocking_assignment                                            {$$ = newList(ASSIGN, $1);}
+	list_of_blocking_assignment ',' blocking_assignment 								{$$ = newList_entry($1, $3);}
+    | blocking_assignment                                           					{$$ = newList(ASSIGN, $1);}
     ;
 
 // 3 Primitive Instances	{$$ = NULL;}
 gate_declaration:
-	vAND list_of_multiple_inputs_gate_declaration_instance ';'							{$$ = newGate(BITWISE_AND, $2, yylineno);}
-	| vNAND	list_of_multiple_inputs_gate_declaration_instance ';'						{$$ = newGate(BITWISE_NAND, $2, yylineno);}
-	| vNOR list_of_multiple_inputs_gate_declaration_instance ';'						{$$ = newGate(BITWISE_NOR, $2, yylineno);}
-	| vNOT list_of_single_input_gate_declaration_instance ';'						    {$$ = newGate(BITWISE_NOT, $2, yylineno);}
-	| vOR list_of_multiple_inputs_gate_declaration_instance ';'							{$$ = newGate(BITWISE_OR, $2, yylineno);}
-	| vXNOR list_of_multiple_inputs_gate_declaration_instance ';'						{$$ = newGate(BITWISE_XNOR, $2, yylineno);}
-	| vXOR list_of_multiple_inputs_gate_declaration_instance ';'						{$$ = newGate(BITWISE_XOR, $2, yylineno);}
+	vAND 		list_of_multiple_inputs_gate_declaration_instance ';'					{$$ = newGate(BITWISE_AND, 		$2, yylineno);}
+	| vNAND		list_of_multiple_inputs_gate_declaration_instance ';'					{$$ = newGate(BITWISE_NAND, 	$2, yylineno);}
+	| vNOR 		list_of_multiple_inputs_gate_declaration_instance ';'					{$$ = newGate(BITWISE_NOR, 		$2, yylineno);}
+	| vNOT 		list_of_single_input_gate_declaration_instance ';'						{$$ = newGate(BITWISE_NOT, 		$2, yylineno);}
+	| vBUF	    list_of_single_input_gate_declaration_instance ';'						{$$ = newGate(BUF, 				$2, yylineno);}
+	| vOR 		list_of_multiple_inputs_gate_declaration_instance ';'					{$$ = newGate(BITWISE_OR, 		$2, yylineno);}
+	| vXNOR 	list_of_multiple_inputs_gate_declaration_instance ';'					{$$ = newGate(BITWISE_XNOR, 	$2, yylineno);}
+	| vXOR 		list_of_multiple_inputs_gate_declaration_instance ';'					{$$ = newGate(BITWISE_XOR, 		$2, yylineno);}
+	| vCMOS	    bicontroled_input_gate_instance ';'										{$$ = newGate(CMOS,			 	newList(ONE_GATE_INSTANCE, $2), yylineno);}
+	| vNMOS	    controled_input_gate_instance ';'										{$$ = newGate(NMOS, 			newList(ONE_GATE_INSTANCE, $2), yylineno);}
+	| vPMOS	    controled_input_gate_instance ';'										{$$ = newGate(PMOS, 			newList(ONE_GATE_INSTANCE, $2), yylineno);}
+	| vNOTIF0	controled_input_gate_instance ';'										{$$ = newGate(NOTIF0, 			newList(ONE_GATE_INSTANCE, $2), yylineno);}
+	| vNOTIF1	controled_input_gate_instance ';'										{$$ = newGate(NOTIF1, 			newList(ONE_GATE_INSTANCE, $2), yylineno);}
 	;
+
+
 
 list_of_multiple_inputs_gate_declaration_instance:
 	list_of_multiple_inputs_gate_declaration_instance ',' multiple_inputs_gate_instance 	{$$ = newList_entry($1, $3);}
-	|multiple_inputs_gate_instance                                      					{$$ = newList(ONE_GATE_INSTANCE, $1);}
+	| multiple_inputs_gate_instance                                      					{$$ = newList(ONE_GATE_INSTANCE, $1);}
 	;
 
 list_of_single_input_gate_declaration_instance:
 	list_of_single_input_gate_declaration_instance ',' single_input_gate_instance			{$$ = newList_entry($1, $3);}
-	|single_input_gate_instance                                     					 	{$$ = newList(ONE_GATE_INSTANCE, $1);}
+	| single_input_gate_instance                                     					 	{$$ = newList(ONE_GATE_INSTANCE, $1);}
 	;
 
 single_input_gate_instance:
-	vSYMBOL_ID '(' expression ',' expression ')'				{$$ = newGateInstance($1, $3, $5, NULL, yylineno);}
-	| '(' expression ',' expression ')'							{$$ = newGateInstance(NULL, $2, $4, NULL, yylineno);}
+	vSYMBOL_ID '(' expression ',' expression ')'				{$$ = newGateInstance($1, {$3, $5}, yylineno);}
+	| '(' expression ',' expression ')'							{$$ = newGateInstance(NULL, {$2, $4}, yylineno);}
+	;
+
+controled_input_gate_instance:
+	vSYMBOL_ID '(' expression ',' expression ',' expression ')'				{$$ = newGateInstance($1, {$3, $5, $7}, yylineno);}
+	| '(' expression ',' expression ',' expression ')'						{$$ = newGateInstance(NULL, {$2, $4, $6}, yylineno);}
+	;
+
+bicontroled_input_gate_instance:
+	vSYMBOL_ID '(' expression ',' expression ',' expression ',' expression ')'				{$$ = newGateInstance($1, {$3, $5, $7, $9}, yylineno);}
+	| '(' expression ',' expression ',' expression ',' expression ')'						{$$ = newGateInstance(NULL, {$2, $4, $6, $8}, yylineno);}
 	;
 
 multiple_inputs_gate_instance:
     vSYMBOL_ID '(' expression ',' expression ',' list_of_multiple_inputs_gate_connections ')'	{$$ = newMultipleInputsGateInstance($1, $3, $5, $7, yylineno);}
 	| '(' expression ',' expression ',' list_of_multiple_inputs_gate_connections ')'			{$$ = newMultipleInputsGateInstance(NULL, $2, $4, $6, yylineno);}
-//	| vSYMBOL_ID '(' expression ',' expression ')'												{$$ = newGateInstance($1, $3, $5, NULL, yylineno);}
-//	| '(' expression ',' expression ')'															{$$ = newGateInstance(NULL, $2, $4, NULL, yylineno);}
 	;
 
-list_of_multiple_inputs_gate_connections: list_of_multiple_inputs_gate_connections ',' expression	{$$ = newList_entry($1, $3);}
+list_of_multiple_inputs_gate_connections: 
+	list_of_multiple_inputs_gate_connections ',' expression											{$$ = newList_entry($1, $3);}
 	| expression																					{$$ = newModuleConnection(NULL, $1, yylineno);}
 	;
 
 // 4 MOdule Instantiations	{$$ = NULL;}
-module_instantiation: vSYMBOL_ID list_of_module_instance ';' 		{$$ = newModuleInstance($1, $2, yylineno);}
-//	|   vSYMBOL_ID module_instance ',' module_instantiation ';'		{$$ = addNewModuleInstance($1, $2, yylineno);}
+module_instantiation: 
+	vSYMBOL_ID list_of_module_instance ';' 							{$$ = newModuleInstance($1, $2, yylineno);}
 	;
 
 list_of_module_instance:
 	list_of_module_instance ',' module_instance                           	{$$ = newList_entry($1, $3);}
-	|module_instance                                                      	{$$ = newList(ONE_MODULE_INSTANCE, $1);}
+	| module_instance                                                      	{$$ = newList(ONE_MODULE_INSTANCE, $1);}
 	;
 
 // 4 Function Instantiations	{$$ = NULL;}
-	function_instantiation: vSYMBOL_ID function_instance 			{$$ = newFunctionInstance($1, $2, yylineno);}
-//  | '(' function_instantiation ')'								{$$ = $2;}
-// 	|   vSYMBOL_ID module_instance ',' module_instantiation ';'		{$$ = addNewModuleInstance($1, $2, yylineno);}
+function_instantiation: 
+	vSYMBOL_ID function_instance 									{$$ = newFunctionInstance($1, $2, yylineno);}
 	;
 
 function_instance:
@@ -497,15 +513,15 @@ expression:
 	;
 
 primary:
-  vINTEGRAL				                  {$$ = newNumberNode($1, LONG_LONG, UNSIGNED, yylineno);}
-  | vUNSIGNED_DECIMAL				        {$$ = newNumberNode($1, DEC, UNSIGNED, yylineno);}
-  | vUNSIGNED_OCTAL				          {$$ = newNumberNode($1, OCT, UNSIGNED, yylineno);}
-  | vUNSIGNED_HEXADECIMAL			      {$$ = newNumberNode($1, HEX, UNSIGNED, yylineno);}
-  | vUNSIGNED_BINARY				        {$$ = newNumberNode($1, BIN, UNSIGNED, yylineno);}
-  | vSIGNED_DECIMAL				        {$$ = newNumberNode($1, DEC, SIGNED, yylineno);}
-  | vSIGNED_OCTAL				          {$$ = newNumberNode($1, OCT, SIGNED, yylineno);}
-  | vSIGNED_HEXADECIMAL			      {$$ = newNumberNode($1, HEX, SIGNED, yylineno);}
-  | vSIGNED_BINARY				        {$$ = newNumberNode($1, BIN, SIGNED, yylineno);}
+	vINTEGRAL				                  {$$ = newNumberNode($1, LONG_LONG, UNSIGNED, yylineno);}
+	| vUNSIGNED_DECIMAL				        {$$ = newNumberNode($1, DEC, UNSIGNED, yylineno);}
+	| vUNSIGNED_OCTAL				          {$$ = newNumberNode($1, OCT, UNSIGNED, yylineno);}
+	| vUNSIGNED_HEXADECIMAL			      {$$ = newNumberNode($1, HEX, UNSIGNED, yylineno);}
+	| vUNSIGNED_BINARY				        {$$ = newNumberNode($1, BIN, UNSIGNED, yylineno);}
+	| vSIGNED_DECIMAL				        {$$ = newNumberNode($1, DEC, SIGNED, yylineno);}
+	| vSIGNED_OCTAL				          {$$ = newNumberNode($1, OCT, SIGNED, yylineno);}
+	| vSIGNED_HEXADECIMAL			      {$$ = newNumberNode($1, HEX, SIGNED, yylineno);}
+	| vSIGNED_BINARY				        {$$ = newNumberNode($1, BIN, SIGNED, yylineno);}
 	| vSYMBOL_ID											{$$ = newSymbolNode($1, yylineno);}
 	| vSYMBOL_ID '[' expression ']'							{$$ = newArrayRef($1, $3, yylineno);}
 	| vSYMBOL_ID '[' expression ']' '[' expression ']'		{$$ = newArrayRef2D($1, $3, $6, yylineno);}

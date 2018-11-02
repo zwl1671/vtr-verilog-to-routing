@@ -48,7 +48,6 @@ void define_set_input_logical_function(nnode_t *node, const char *bit_output, FI
 void define_ff(nnode_t *node, FILE *out);
 void define_decoded_mux(nnode_t *node, FILE *out);
 void output_blif_pin_connect(nnode_t *node, FILE *out);
-void add_the_blackbox_for_latches(FILE *out);
 void output_blif(char *file_name, netlist_t *netlist);
 
 /*---------------------------------------------------------------------------
@@ -222,12 +221,6 @@ void output_blif(char *file_name, netlist_t *netlist)
 	add_the_blackbox_for_mults(out);
 	add_the_blackbox_for_adds(out);
 
-	//Check if blackbox latches are enabled && one has been included in the BLIF file
-	if(global_args.black_box_latches && (TRUE == haveOutputLatchBlackbox))
-	{
-		add_the_blackbox_for_latches(out);
-	}
-
 	output_hard_blocks(out);
 	fclose(out);
 }
@@ -311,23 +304,39 @@ void output_node(nnode_t *node, short /*traverse_number*/, FILE *fp)
 	switch (node->type)
 	{
 		case GT:
+			oassert(node->num_input_pins == 3);
+			oassert(node->input_pins[2] != NULL);
 			define_set_input_logical_function(node, "100 1\n", fp);
-			oassert(node->num_input_pins == 3);
-			oassert(node->input_pins[2] != NULL);
 			break;
+
 		case LT:
-			define_set_input_logical_function(node, "010 1\n", fp); // last input decides if this
 			oassert(node->num_input_pins == 3);
 			oassert(node->input_pins[2] != NULL);
+			define_set_input_logical_function(node, "010 1\n", fp); // last input decides if this
 			break;
+
 		case ADDER_FUNC:
 			define_set_input_logical_function(node, "001 1\n010 1\n100 1\n111 1\n", fp);
 			break;
+
 		case CARRY_FUNC:
 			define_set_input_logical_function(node, "011 1\n101 1\n110 1\n111 1\n", fp);
 			break;
+
 		case BITWISE_NOT:
 			define_set_input_logical_function(node, "0 1\n", fp);
+			break;
+
+		case CMOS:
+			define_set_input_logical_function(node, "1-1- 1\n -1-1 1", fp);
+			break;
+
+		case NMOS:
+			define_set_input_logical_function(node, "11 1\n", fp);
+			break;
+
+		case PMOS:
+			define_set_input_logical_function(node, "11 1\n", fp);
 			break;
 
 		case LOGICAL_AND:
@@ -383,25 +392,9 @@ void output_node(nnode_t *node, short /*traverse_number*/, FILE *fp)
 			/* some nodes already converted */
 			break;
 
-		case BITWISE_AND:
-		case BITWISE_NAND:
-		case BITWISE_NOR:
-		case BITWISE_XNOR:
-		case BITWISE_XOR:
-		case BITWISE_OR:
-		case BUF_NODE:
-		case MULTI_PORT_MUX:
-		case SL:
-		case SR:
-		case CASE_EQUAL:
-		case CASE_NOT_EQUAL:
-		case DIVIDE:
-		case MODULO:
-		case GTE:
-		case LTE:
 		default:
 			/* these nodes should have been converted to softer versions */
-			error_message(NETLIST_ERROR, 0,-1,"Output blif: node should have been converted to softer version.");
+			error_message(NETLIST_ERROR, 0,-1,"Output blif: node <%s> should have been converted to softer version.",operation_name(node->type));
 			break;
 	}
 }
@@ -877,31 +870,6 @@ void define_decoded_mux(nnode_t *node, FILE *out)
 	}
 
 	fprintf(out, "\n");
-}
-
-/*--------------------------------------------------------------------------
- * (function: add_the_blackbox_for_latches)
- *------------------------------------------------------------------------*/
-void add_the_blackbox_for_latches(FILE *out)
-{
-	fprintf(out, ".model bb_latch\n");
-
-	/* add the inputs */
-	fprintf(out, ".inputs");
-	fprintf(out, " i[0]");
-	fprintf(out, "\n");
-
-	/* add the outputs */
-	fprintf(out, ".outputs");
-	fprintf(out, " o[0]");
-	fprintf(out, "\n");
-
-	fprintf(out, ".blackbox\n");
-	fprintf(out, ".end\n");
-	fprintf(out, "\n");
-
-
-	return;
 }
 
 /*--------------------------------------------------------------------------

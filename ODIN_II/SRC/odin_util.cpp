@@ -75,6 +75,32 @@ char *make_full_ref_name(const char *previous, char *module_name, char *module_i
 }
 
 /*---------------------------------------------------------------------------------------------
+ * (function: operation_name)
+ * 	Get the string version of a node
+ *-------------------------------------------------------------------------------------------*/
+const char *operation_list_str[] = OP_LIST(TO_STRING);
+const char *operation_name(operation_list type)
+{
+	oassert(type > NO_OP && type < LAST_OP
+		&& "wrong operation, no matching string for it");
+
+	return operation_list_str[type];
+}
+
+/*---------------------------------------------------------------------------------------------
+ * (function: operation_name)
+ * 	Get the string version of a node
+ *-------------------------------------------------------------------------------------------*/
+const char *ids_list_str[] = IDS_LIST(TO_STRING);
+const char *ids_name(ids type)
+{
+	oassert(type > NO_ID && type < LAST_ID
+		&& "wrong operation, no matching string for it");
+
+	return ids_list_str[type];
+}
+
+/*---------------------------------------------------------------------------------------------
  * (function: twos_complement)
  * Changes a bit string to its twos complement value
  *-------------------------------------------------------------------------------------------*/

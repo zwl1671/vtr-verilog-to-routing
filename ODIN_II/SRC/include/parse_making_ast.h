@@ -56,7 +56,7 @@ ast_node_t *newfunctionList(ids node_type, ast_node_t *child);
 ast_node_t *newParallelConnection(ast_node_t *expression1, ast_node_t *expression2, int line_number);
 
 /* GATE INSTANCE */
-ast_node_t *newGateInstance(char* gate_instance_name, ast_node_t *expression1, ast_node_t *expression2, ast_node_t *expression3, int line_number);
+ast_node_t *newGateInstance(char* gate_instance_name, std::vector<ast_node_t *>expressions, int line_number);
 ast_node_t *newMultipleInputsGateInstance(char* gate_instance_name, ast_node_t *expression1, ast_node_t *expression2, ast_node_t *expression3, int line_number);
 ast_node_t *newGate(operation_list gate_type, ast_node_t *gate_instance, int line_number);
 

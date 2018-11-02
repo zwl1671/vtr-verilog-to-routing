@@ -100,13 +100,13 @@ void read_soft_def_file(std::string input_file_name)
 
 			if(!error)
 			{
-				std::string operation_name 			= tokens[0];
+				std::string op_name 			= tokens[0];
 				int operation_bitsize			 			=	std::stoi(tokens[1]);
 				std::string soft_hard						= tokens[2];
 				std::string sub_structure_name	= tokens[3];
 				int sub_structure_bitsize				=	std::stoi(tokens[4]);
 
-				std::string lookup = operation_name + "_0";
+				std::string lookup = op_name + "_0";
 
 				auto candidate = soft_def_map.find(lookup);
 				if(candidate == soft_def_map.end() \
@@ -119,7 +119,7 @@ void read_soft_def_file(std::string input_file_name)
 				}
 				else
 				{
-					std::string key_map = operation_name + "_" + tokens[1];
+					std::string key_map = op_name + "_" + tokens[1];
 					soft_sub_structure* def = (soft_sub_structure*)vtr::malloc(sizeof(soft_sub_structure));
 					def->type= vtr::strdup(soft_hard.c_str());
 					def->name= vtr::strdup(sub_structure_name.c_str());
