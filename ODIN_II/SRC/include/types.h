@@ -26,6 +26,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 #include "read_xml_arch_file.h"
 #include "simulate_blif.h"
 #include "argparse_value.hpp"
+#include "simulator_bit_map.h"
 #include <mutex>
 
 #include <stdlib.h>
@@ -489,8 +490,8 @@ struct nnode_t_t
 
 	short *associated_function;
 
-	char** bit_map; /*storing the bit map */
-	int bit_map_line_count;
+	bit_tree_map *bit_map; /*storing the bit map */
+	std::vector<std::string> orig_bit_map;
 
 	// For simulation
 	int in_queue; // Flag used by the simulator to avoid double queueing.

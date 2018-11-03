@@ -1787,43 +1787,47 @@ static void compute_multiply_node(nnode_t *node, int cycle)
 
 }
 
-// TODO: Needs to be verified.
+inline static short convert_result(signed char value)
+{
+	if(value == 0 || value == '0')
+        return 0;
+    else if(value == 1 || value == '1')
+        return 1;
+    else
+        return -1;
+}
+
+inline static char convert_result_to_chr(signed char value)
+{
+	if(value == 0 || value == '0')
+        return '0';
+    else if(value == 1 || value == '1')
+        return '1';
+    else
+        return 'x';
+}
+
 static void compute_generic_node(nnode_t *node, int cycle)
 {
-	int line_count_bitmap = node->bit_map_line_count;
-	char **bit_map = node->bit_map;
-
-	int lut_size  = 0;
-	while (bit_map[0][lut_size] != 0)
-		lut_size++;
-
-	int found = 0;
-	int i;
-	for (i = 0; i < line_count_bitmap && (!found); i++)
+	// gather input pins
+	std::string input_bit_string = "";
+	for(int i =0; i < node->num_input_pins; i++)
+		input_bit_string.push_back(convert_result_to_chr(get_pin_value(node->input_pins[i],cycle)));
+	
+	if(node->num_input_pins != node->bit_map->depth)
 	{
-		int j;
-		for (j = 0; j < lut_size; j++)
-		{
-			if (get_pin_value(node->input_pins[j],cycle) < 0)
-			{
-				update_pin_value(node->output_pins[0], -1, cycle);
-				return;
-			}
-
-			if ((bit_map[i][j] != '-') && (bit_map[i][j]-'0' != get_pin_value(node->input_pins[j],cycle)))
-				break;
-		}
-
-		if (j == lut_size) found = TRUE;
+		error_message(SIMULATION_ERROR, -1, -1, "input length miss-match: (pin_len<%d> != bit_map_depth<%d>) current input<%s>"
+			,node->num_input_pins ,node->bit_map->depth, input_bit_string.c_str());
+	}
+	else if(node->num_output_pins != node->bit_map->result_len)
+	{
+		error_message(SIMULATION_ERROR, -1, -1, "output length miss-match: (pin_len<%d> != bit_map_depth<%d>) current input<%s>"
+			,node->num_output_pins ,node->bit_map->result_len, input_bit_string.c_str());
 	}
 
-	if (node->generic_output == 1){
-		if (found) update_pin_value(node->output_pins[0], 1, cycle);
-		else       update_pin_value(node->output_pins[0], 0, cycle);
-	} else {
-		if (found) update_pin_value(node->output_pins[0], 0, cycle);
-		else       update_pin_value(node->output_pins[0], 1, cycle);
-	}
+	std::string result = find_result(node->bit_map, input_bit_string);
+	for(int i =0; i < node->num_output_pins; i++)
+		update_pin_value(node->output_pins[0], convert_result(result[i]), cycle);
 }
 
 /*

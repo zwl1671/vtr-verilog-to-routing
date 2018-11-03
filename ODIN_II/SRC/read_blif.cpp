@@ -21,14 +21,15 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#include<stdlib.h>
-#include<string.h>
-#include<stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
 #include "globals.h"
 #include "read_blif.h"
 #include "string_cache.h"
 #include "netlist_utils.h"
 
+#include "simulator_bit_map.h"
 #include "netlist_utils.h"
 #include "types.h"
 #include "hashtable.h"
@@ -100,7 +101,7 @@ int read_tokens (char *buffer, hard_block_models *models, FILE *file, hashtable_
 static void dum_parse (char *buffer, FILE *file);
 void create_internal_node_and_driver(FILE *file, hashtable_t *output_nets_hash);
 short assign_node_type_from_node_name(char * output_name);// function will decide the node->type of the given node
-short read_bit_map_find_unknown_gate(int input_count, nnode_t * node, FILE *file);
+operation_list read_bit_map_find_unknown_gate(int input_count, nnode_t *node, FILE *file, char *parent_node_name);
 void create_latch_node_and_driver(FILE *file, hashtable_t *output_nets_hash);
 void create_hard_block_nodes(hard_block_models *models, FILE *file, hashtable_t *output_nets_hash);
 void hook_up_nets(hashtable_t *output_nets_hash);
@@ -179,8 +180,6 @@ void read_blif(char * blif_file)
 	output_nets_hash->destroy(output_nets_hash);
 	fclose (file);
 }
-
-
 
 /*---------------------------------------------------------------------------------------------
  * (function: read_tokens)
@@ -637,38 +636,12 @@ void create_internal_node_and_driver(FILE *file, hashtable_t *output_nets_hash)
 	}
 	else
 	{
-		/* assign the node type by seeing the name */
-		operation_list node_type = (operation_list)assign_node_type_from_node_name(names[input_count-1]);
-
-		if(node_type != GENERIC)
-		{
-			new_node->type = node_type;
-			skip_reading_bit_map = TRUE;
-		}
-		/* Check for GENERIC type , change the node by reading the bit map */
-		else if(node_type == GENERIC)
-		{
-			new_node->type = (operation_list)read_bit_map_find_unknown_gate(input_count-1, new_node, file);
-			skip_reading_bit_map = TRUE;
-		}
-
 		/* allocate the input pin (= input_count-1)*/
 		if (input_count-1 > 0) // check if there is any input pins
 		{
 			allocate_more_input_pins(new_node, input_count-1);
-
-			/* add the port information */
-			if(new_node->type == MUX_2)
-			{
-				add_input_port_information(new_node, (input_count-1)/2);
-				add_input_port_information(new_node, (input_count-1)/2);
-			}
-			else
-			{
-				int i;
-				for(i = 0; i < input_count-1; i++)
-					add_input_port_information(new_node, 1);
-			}
+			for(int i = 0; i < input_count-1; i++)
+				add_input_port_information(new_node, 1);
 		}
 
 		/* add names and type information to the created input pins */
@@ -680,6 +653,14 @@ void create_internal_node_and_driver(FILE *file, hashtable_t *output_nets_hash)
 			new_pin->type = INPUT;
 			add_input_pin_to_node(new_node, new_pin, i);
 		}
+		/* add a name for the node, keeping the name of the node same as the output */
+		new_node->name = make_full_ref_name(names[input_count-1],NULL, NULL, NULL,-1);
+
+		new_node->type = read_bit_map_find_unknown_gate(input_count-1, new_node, file, new_node->name);
+		skip_reading_bit_map = TRUE;
+	
+
+
 
 		/* add information for the intermediate VCC and GND node (appears in ABC )*/
 		if(new_node->type == GND_NODE)
@@ -740,12 +721,10 @@ void create_internal_node_and_driver(FILE *file, hashtable_t *output_nets_hash)
    * function: read_bit_map_find_unknown_gate
      read the bit map for simulation
 *-------------------------------------------------------------------------------------------*/
-short read_bit_map_find_unknown_gate(int input_count, nnode_t *node, FILE *file)
+operation_list read_bit_map_find_unknown_gate(int input_count, nnode_t *node, FILE *file, char *parent_node_name)
 {
 	fpos_t pos;
 	int last_line = file_line_number;
-	const char *One = "1";
-	const char *Zero = "0";
 	fgetpos(file,&pos);
 
 	if(!input_count)
@@ -756,16 +735,15 @@ short read_bit_map_find_unknown_gate(int input_count, nnode_t *node, FILE *file)
 		file_line_number = last_line;
 		fsetpos(file,&pos);
 
-		char *ptr = vtr::strtok(buffer,"\t\n", file, buffer);
-		if      (!strcmp(ptr," 0")) return GND_NODE;
-		else if (!strcmp(ptr," 1")) return VCC_NODE;
+		char *ptr = vtr::strtok(buffer,TOKENS, file, buffer);
+		if      (!strcmp(ptr,"0")) return GND_NODE;
+		else if (!strcmp(ptr,"1")) return VCC_NODE;
 		else if (!ptr)              return GND_NODE;
 		else                        return VCC_NODE;
 	}
 
-	char **bit_map = NULL;
-	char *output_bit_map = NULL;// to distinguish whether for the bit_map output is 1 or 0
-	int line_count_bitmap = 0; //stores the number of lines in a particular bit map
+	std::vector<std::string> bit_map;
+	std::vector<std::string> output_bit_map;
 	char buffer[READ_BLIF_BUFFER];
 	while(1)
 	{
@@ -773,205 +751,18 @@ short read_bit_map_find_unknown_gate(int input_count, nnode_t *node, FILE *file)
 		if(!(buffer[0] == '0' || buffer[0] == '1' || buffer[0] == '-'))
 			break;
 
-		bit_map = (char**)vtr::realloc(bit_map,sizeof(char*) * (line_count_bitmap + 1));
-		bit_map[line_count_bitmap++] = vtr::strdup(vtr::strtok(buffer,TOKENS, file, buffer));
-		if (output_bit_map != NULL) vtr::free(output_bit_map);
-		output_bit_map = vtr::strdup(vtr::strtok(NULL,TOKENS, file, buffer));
-	}
-
-	if (!strcmp(output_bit_map, One))
-	{
-		vtr::free(output_bit_map);
-		output_bit_map = vtr::strdup(One);
-		node->generic_output = 1;
-	}
-	else
-	{
-		vtr::free(output_bit_map);
-		output_bit_map = vtr::strdup(Zero);
-		node->generic_output = 0;
+		bit_map.push_back(vtr::strtok(buffer,TOKENS, file, buffer));
+		output_bit_map.push_back(vtr::strtok(NULL,TOKENS, file, buffer));
 	}
 
 	file_line_number = last_line;
 	fsetpos(file,&pos);
+	node->orig_bit_map = bit_map;
+	
+	bit_tree_map *root = consume_bit_map_line(bit_map, output_bit_map, parent_node_name);
+	
+	node->bit_map = root;
 
-	/*Patern recognition for faster simulation*/
-	if(node->generic_output){
-		//On-gate recognition
-		//TODO move off-logic parts to appropriate code block
-		/* Single line bit map : */
-		if(line_count_bitmap == 1)
-		{
-			// GT
-			if(!strcmp(bit_map[0],"100"))
-				return GT;
-
-			// LT
-			if(!strcmp(bit_map[0],"010"))
-				return LT;
-
-			/* LOGICAL_AND and LOGICAL_NAND for ABC*/
-			int i;
-			for(i = 0; i < input_count && bit_map[0][i] == '1'; i++);
-
-			if(i == input_count)
-			{
-				if (!strcmp(output_bit_map,"1"))
-					return LOGICAL_AND;
-				else if (!strcmp(output_bit_map,"0"))
-					return LOGICAL_NAND;
-			}
-
-			/* BITWISE_NOT */
-			if(!strcmp(bit_map[0],"0"))
-				return BITWISE_NOT;
-
-			/* LOGICAL_NOR and LOGICAL_OR for ABC */
-			for(i = 0; i < input_count && bit_map[0][i] == '0'; i++);
-			if(i == input_count)
-			{
-				if (!strcmp(output_bit_map,"1"))
-					return LOGICAL_NOR;
-				else if (!strcmp(output_bit_map,"0"))
-					return LOGICAL_OR;
-			}
-		}
-		/* Assumption that bit map is in order when read from blif */
-		else if(line_count_bitmap == 2)
-		{
-			/* LOGICAL_XOR */
-			if((strcmp(bit_map[0],"01")==0) && (strcmp(bit_map[1],"10")==0)) return LOGICAL_XOR;
-			/* LOGICAL_XNOR */
-			if((strcmp(bit_map[0],"00")==0) && (strcmp(bit_map[1],"11")==0)) return LOGICAL_XNOR;
-		}
-		else if (line_count_bitmap == 4)
-		{
-			/* ADDER_FUNC */
-			if (
-					   (!strcmp(bit_map[0],"001"))
-					&& (!strcmp(bit_map[1],"010"))
-					&& (!strcmp(bit_map[2],"100"))
-					&& (!strcmp(bit_map[3],"111"))
-			)
-				return ADDER_FUNC;
-			/* CARRY_FUNC */
-			if(
-					   (!strcmp(bit_map[0],"011"))
-					&& (!strcmp(bit_map[1],"101"))
-					&& (!strcmp(bit_map[2],"110"))
-					&& (!strcmp(bit_map[3],"111"))
-			)
-				return 	CARRY_FUNC;
-			/* LOGICAL_XOR */
-			if(
-					   (!strcmp(bit_map[0],"001"))
-					&& (!strcmp(bit_map[1],"010"))
-					&& (!strcmp(bit_map[2],"100"))
-					&& (!strcmp(bit_map[3],"111"))
-			)
-				return 	LOGICAL_XOR;
-			/* LOGICAL_XNOR */
-			if(
-					   (!strcmp(bit_map[0],"000"))
-					&& (!strcmp(bit_map[1],"011"))
-					&& (!strcmp(bit_map[2],"101"))
-					&& (!strcmp(bit_map[3],"110"))
-			)
-				return 	LOGICAL_XNOR;
-		}
-
-
-		if(line_count_bitmap == input_count)
-		{
-			/* LOGICAL_OR */
-			int i;
-			for(i = 0; i < line_count_bitmap; i++)
-			{
-				if(bit_map[i][i] == '1')
-				{
-					int j;
-					for(j = 1; j < input_count; j++)
-						if(bit_map[i][(i+j)% input_count]!='-')
-							break;
-
-					if(j != input_count)
-						break;
-				}
-				else
-				{
-					break;
-				}
-			}
-
-			if(i == line_count_bitmap)
-				return LOGICAL_OR;
-
-			/* LOGICAL_NAND */
-			for(i = 0; i < line_count_bitmap; i++)
-			{
-				if(bit_map[i][i]=='0')
-				{
-					int j;
-					for(j = 1; j < input_count; j++)
-						if(bit_map[i][(i+j)% input_count]!='-')
-							break;
-
-					if(j != input_count) break;
-				}
-				else
-				{
-					break;
-				}
-			}
-
-			if(i == line_count_bitmap)
-				return LOGICAL_NAND;
-		}
-
-		/* MUX_2 */
-		if(line_count_bitmap*2 == input_count)
-		{
-			int i;
-			for(i = 0; i < line_count_bitmap; i++)
-			{
-				if (
-						   (bit_map[i][i]=='1')
-						&& (bit_map[i][i+line_count_bitmap] =='1')
-				)
-				{
-					int j;
-					for (j = 1; j < line_count_bitmap; j++)
-					{
-						if (
-								   (bit_map[i][ (i+j) % line_count_bitmap] != '-')
-								|| (bit_map[i][((i+j) % line_count_bitmap) + line_count_bitmap] != '-')
-						)
-						{
-							break;
-						}
-					}
-
-					if(j != input_count)
-						break;
-				}
-				else
-				{
-					break;
-				}
-			}
-
-			if(i == line_count_bitmap)
-				return MUX_2;
-		}
-	} else if (node->generic_output == 0){
-		//Off-gate recognition
-		//TODO
-	}
-
-	 /* assigning the bit_map to the node if it is GENERIC */
-
-	node->bit_map = bit_map;
-	node->bit_map_line_count = line_count_bitmap;
 	return GENERIC;
 }
 

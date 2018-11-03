@@ -309,7 +309,7 @@ void compute_switching_activities ( netlist_t *net ) {
             }
 
             // If nodes has a bitmap/truthtable use LAG 1 BDD model to determine switching activity
-            if ( net->internal_nodes[x]->bit_map_line_count > 0 ) {
+            if ( net->internal_nodes[x]->orig_bit_map.size() > 0 ) {
                 bdd = build_bdd_for_node (dd, net->internal_nodes[x] );
                 Cudd_Ref ( bdd );
                 n0 = n1 = 0;
@@ -525,33 +525,44 @@ ace_cube_t * ace_cube_new_dc(int num_literals) {
  * This function is based upon ABC's Abc_ConvertSopToBdd.
  *
  *-------------------------------------------------------------------------------------------*/
+
+
 DdNode * build_bdd_for_node ( DdManager * dd, nnode_t *node ) {
 
-    DdNode * bSum, * bCube, * bTemp, * bVar;
+    DdNode * bSum, * bCube, * bTemp;
     int Value, x, y;
 
     bSum = Cudd_ReadLogicZero(dd);
     Cudd_Ref( bSum );
 
     // check the logic function of the node
-    for ( x = 0; x < node->bit_map_line_count; x++ ) {
-        bCube = Cudd_ReadOne(dd);   Cudd_Ref( bCube );
-        for ( y = 0;  y < (int) strlen(node->bit_map[x]); y++ ) {
-            Value = node->bit_map[x][y];
+    for ( x = 0; x < node->orig_bit_map.size(); x++ ) 
+    {
+        bCube = Cudd_ReadOne(dd);   
+        Cudd_Ref( bCube );
+        for ( y = 0;  y < node->orig_bit_map[x].size(); y++ ) {
+            DdNode *bVar = NULL;
+            Value = node->orig_bit_map[x][y];
             if ( Value == '0' )
                 bVar = Cudd_Not( Cudd_bddIthVar( dd, y ) );
+
             else if ( Value == '1' )
                 bVar = Cudd_bddIthVar( dd, y );
-            else
-                continue;
-            bCube  = Cudd_bddAnd( dd, bTemp = bCube, bVar );   Cudd_Ref( bCube );
-            Cudd_RecursiveDeref( dd, bTemp );
+
+            if(bVar)
+            {
+                bTemp = bCube;
+                bCube  = Cudd_bddAnd( dd, bTemp, bVar );   
+                Cudd_Ref( bCube );
+                Cudd_RecursiveDeref( dd, bTemp );
+            }
         }
         bSum = Cudd_bddOr( dd, bTemp = bSum, bCube );
         Cudd_Ref( bSum );
         Cudd_RecursiveDeref( dd, bTemp );
         Cudd_RecursiveDeref( dd, bCube );
     }
+
     Cudd_Deref( bSum );
     return bSum;
 }

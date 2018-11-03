@@ -1,33 +1,32 @@
 // DEFINES
 `define BITS 2         // Bit width of the operands
+`define WORD_SIZE 4
 
-module 	bm_simple_memory(clock, 
-		reset_n, 
-		value_out,
-		value_in
-		);
+module 	bm_simple_memory(
+	clock, 
+	reset, 
+	addr_in,
+	addr_out,
+	value_out,
+	value_in
+);
 
 // SIGNAL DECLARATIONS
 input	clock;
-input 	reset_n;
-input 	[`BITS-1:0]value_in;
+input 	reset;
+input 	[`WORD_SIZE-1:0]	value_in;
+input 	[`BITS-1:0] 		addr_in;
+input 	[`BITS-1:0] 		addr_out;
 
-output [`BITS-1:0] value_out;
-wire [`BITS-1:0]    value_out;
+output	[`WORD_SIZE-1:0]	value_out;
 
-reg [`BITS-1:0] memory [3:0]; // 4 memory slots of Bits wide
-reg [1:0] address_counter;
-reg [1:0] address_counter2;
-wire [`BITS-1:0] temp;
+reg 	[`WORD_SIZE-1:0] memory [`BITS-1:0];
 
 always @(posedge clock)
 begin
-	address_counter <= 2'b00;
-	address_counter2 <= 2'b01;
-	if (reset_n == 1'b1)
-		memory[address_counter] <= value_in;
+	memory[addr_in] = value_in;
+	value_out = memory[addr_out];
 end
 
-assign value_out = memory[address_counter2];
 
 endmodule
