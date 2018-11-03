@@ -490,7 +490,7 @@ struct nnode_t_t
 
 	short *associated_function;
 
-	bit_tree_map *bit_map; /*storing the bit map */
+	bit_tree_root *bit_map; /*storing the bit map */
 	std::vector<std::string> orig_bit_map;
 
 	// For simulation

@@ -14,141 +14,152 @@ bit_map_values get_mapped_value(signed char value)
 		return _x;
 }
 
-inline static bit_tree_map *bit_map_node(const char *related_node_name, char value, int depth, int result_len)
+inline static bit_tree_map *bit_map_node()
 {
 	bit_tree_map *node = (bit_tree_map *)vtr::malloc(sizeof(bit_tree_map));
 	for(int i=0; i<3; i++)
-	{
-		node->childs[i] = NULL;
-	}
-	node->my_value = value;
-	node->depth = depth;
-	node->related_node_name = vtr::strdup(related_node_name);
-	node->result_len = result_len;
+		node->branch[i] = NULL;
+	
 	return node;
 }
 
-bit_tree_map *free_bit_tree(bit_tree_map *bit_map)
+inline static bit_tree_root *bit_map_root(const char *related_node_name, int depth)
 {
-	if(!bit_map)
-		return NULL;
-
-	if(bit_map->is_leaf)
-	{
-		vtr::free(bit_map->related_node_name);
-		vtr::free(bit_map);
-		return NULL;
-	}
-	else
-	{
-		bit_map->childs[_0] = free_bit_tree(bit_map->childs[_0]);
-		bit_map->childs[_1] = free_bit_tree(bit_map->childs[_1]);
-		bit_map->childs[_x] = free_bit_tree(bit_map->childs[_x]);
-		vtr::free(bit_map);
-		return NULL;
-	}
+	bit_tree_root *root = (bit_tree_root *)vtr::malloc(sizeof(bit_tree_root));
+	root->depth = depth;
+	root->related_node_name = vtr::strdup(related_node_name);
+	root->branch[_0] = bit_map_node();
+	root->branch[_1] = bit_map_node();
+	return root;
 }
 
-bit_tree_map *consume_bit_map_line(std::vector<std::string> lines, std::vector<std::string> results, const char *related_node_name)
+inline static bit_tree_map *free_bit_branches(bit_tree_map *bit_map)
+{
+	if(bit_map)
+	{
+		if(!bit_map->is_leaf)
+		{
+			bit_map->branch[_0] = free_bit_branches(bit_map->branch[_0]);
+			bit_map->branch[_1] = free_bit_branches(bit_map->branch[_1]);
+			bit_map->branch[_x] = free_bit_branches(bit_map->branch[_x]);
+		}
+		vtr::free(bit_map);
+	}
+	return NULL;
+}
+
+bit_tree_root *free_bit_tree(bit_tree_root *bit_map)
+{
+	if(bit_map)
+	{
+		vtr::free(bit_map->related_node_name);
+		bit_map->branch[_0] = free_bit_branches(bit_map->branch[_0]);
+		bit_map->branch[_1] = free_bit_branches(bit_map->branch[_1]);
+		vtr::free(bit_map);
+	}
+	return NULL;
+}
+
+
+bit_tree_root *consume_bit_map_line(std::vector<std::string> lines, std::vector<char> results, const char *related_node_name)
 {
 	if(lines.empty() || results.empty())
 		return NULL;
 
-	bit_tree_map *root = bit_map_node(related_node_name, 0, lines[0].size(), results[0].size());
-	root->is_root = true;
+	bit_tree_root *root = bit_map_root(related_node_name, lines[0].size());
 
 	for(int i=0; i < lines.size(); i++)
 	{
-		bit_tree_map *cur_node = root;
+		bit_map_values cur_trunk = get_mapped_value(results[i]);
+		bit_tree_map *cur_node = root->branch[cur_trunk];
+
 		if(lines[i].size() != lines[0].size())
 			error_message(SIMULATION_ERROR, -1, -1, "mismatched length in input lut @ line %d for node <%s>",i,root->related_node_name);
 
-		if(results[i].size() != results[0].size())
-			error_message(SIMULATION_ERROR, -1, -1, "mismatched length in input lut @ line %d for node <%s>",i,root->related_node_name);
-
-		for(int j=1; j <= lines[i].size(); j++)
+		for(int j=0; j < lines[i].size(); j++)
 		{
-			char input_value = lines[i][j-1];
-			bit_map_values cur_value = get_mapped_value(input_value);
+			bit_map_values cur_value = get_mapped_value(lines[i][j]);
 
-			if(!cur_node->childs[cur_value])
-				cur_node->childs[cur_value] = bit_map_node(root->related_node_name, input_value, lines[i].size(), results[i].size());
+			if(!cur_node->branch[cur_value])
+				cur_node->branch[cur_value] = bit_map_node();
 
-			/* this holds the result */
-			if(j == lines[i].size())
-			{
-				cur_node->result = vtr::strdup(results[i].c_str());
+			if(j+1 == lines[i].size())
 				cur_node->is_leaf = true;
-			}
+			
 		}
 	}
 	return root;
 }
 
-std::string find_result(bit_tree_map *root, std::string line)
+static signed char explore_trunk(bit_tree_map *trunk, char result, const std::string& line, char set_to)
 {
-	if(!root)
-		error_message(SIMULATION_ERROR, -1, -1, "root bit_map is empty");
-
-	if(line == "")
-		return "";
-
-	std::vector<bit_tree_map*> Q = {root};
+	int end = line.size()-1;
+	bool error = false;
+	std::vector<bit_tree_map*> Q = {trunk};
 	std::vector<bit_tree_map*> new_Q;
-
-	std::string result = "";
-
-	for(int j=0; j < line.size(); j++)
+	for(int j=0; j <= end && !Q.empty() && !error; j++)
 	{
-		if(Q.empty())
-			break;
-
-		char input_value = line[j];
-		bit_map_values cur_value = get_mapped_value(input_value);
-
-		for(int i=0; i < Q.size(); i++)
+		bit_map_values cur_value = get_mapped_value(line[j]);
+		for(int i=0; i < Q.size() && !error; i++)
 		{
 			bit_tree_map *bit_map = Q[i];
-
-			if(!bit_map->is_leaf && j == line.size()-1)
-				error_message(SIMULATION_ERROR, -1, -1, "input missmatch: bit map length != input length ");
-
-			if(!bit_map->is_root)
-				printf("######## exploring node #%d @%d for node:%s with input: %s @input id:%d\n", i, bit_map->depth, bit_map->related_node_name, line.c_str(), j);
-			
-			/* this node holds the result */
 			if(bit_map->is_leaf)
 			{
-				if(result == "")
-					result = bit_map->result;
+				if(result)
+				{
+					error = true;
+					result = '!';
+				}
 				else
 				{
-					warning_message(SIMULATION_ERROR, -1, -1, "ambiguous bit map for .name <%s> with multiple result for pattern", bit_map->related_node_name);
-					break;
+					result = set_to;
 				}
 			}
 			else
 			{
-				if(bit_map->childs[cur_value])
-					new_Q.push_back(bit_map->childs[cur_value]);
+				if(bit_map->branch[cur_value])
+					new_Q.push_back(bit_map->branch[cur_value]);
 
 				//include unknown in defined search
-				if(cur_value != _x && bit_map->childs[_x])
-					new_Q.push_back(bit_map->childs[_x]);
-
+				if(cur_value != _x && bit_map->branch[_x])
+					new_Q.push_back(bit_map->branch[_x]);
 			}
 		}
 
 		Q.clear();
 		Q = new_Q;
 		new_Q.clear();
-
 	}
+	return result;
+}
 
-	if(result == "")
+char find_result(bit_tree_root *root, std::string line)
+{
+	if(!root)
+		error_message(SIMULATION_ERROR, -1, -1, "root bit_map is empty");
+
+	if(line == "")
+		return 3;
+ 
+	char result = 0;
+
+
+	if(root->depth > line.size())
+		error_message(SIMULATION_ERROR, -1, -1, "input missmatch: bit map length > input length ");
+	else if(root->depth < line.size())
+		error_message(SIMULATION_ERROR, -1, -1, "input missmatch: bit map length < input length ");
+
+	result = explore_trunk(root->branch[_0], result, line, '0');
+	result = explore_trunk(root->branch[_1], result, line, '1');
+	if(result == '!')
 	{
-		warning_message(SIMULATION_ERROR, -1, -1, "missmatch between input and lut depth");
-		result = "x";
+		warning_message(SIMULATION_ERROR, -1, -1, "ambiguous bit map for .name <%s> with multiple, or no result for pattern", root->related_node_name);
+		result = 'x';
 	}
+	else if(!result)
+	{
+		result = 'x';
+	}
+
 	return result;
 }

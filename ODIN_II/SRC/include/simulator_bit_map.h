@@ -7,15 +7,16 @@
 typedef struct bit_tree_map_t bit_tree_map;
 struct bit_tree_map_t
 {
-	bit_tree_map *childs[3];
-	char my_value;
-	int depth;
-    int result_len;
-	char *result;
-    char *related_node_name;
-    bool is_root;
+	bit_tree_map *branch[3];
     bool is_leaf;
 };
+
+typedef struct bit_tree_root_t
+{
+	bit_tree_map *branch[2];
+    int depth;
+    char *related_node_name;
+}bit_tree_root;
 
 typedef enum
 {
@@ -26,8 +27,8 @@ typedef enum
 
 bit_map_values get_mapped_value(signed char value);
 
-bit_tree_map *free_bit_tree(bit_tree_map *bit_map);
-bit_tree_map *consume_bit_map_line(std::vector<std::string> lines, std::vector<std::string> results, const char *related_node_name);
-std::string find_result(bit_tree_map *bit_map, std::string line);
+bit_tree_root *free_bit_tree(bit_tree_root *bit_map);
+bit_tree_root *consume_bit_map_line(std::vector<std::string> lines, std::vector<char> results, const char *related_node_name);
+char find_result(bit_tree_root *bit_map, std::string line);
 
 #endif

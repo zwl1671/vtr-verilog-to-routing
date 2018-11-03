@@ -295,7 +295,7 @@ void create_latch_node_and_driver(FILE *file, hashtable_t *output_nets_hash)
 	}
 
 	/* assigning the new_node */
-	if(input_token_count != 5)
+	if(input_token_count == 5)
 	{
 		/* supported added for the ABC .latch output without control */
 		if(input_token_count == 3)
@@ -743,7 +743,7 @@ operation_list read_bit_map_find_unknown_gate(int input_count, nnode_t *node, FI
 	}
 
 	std::vector<std::string> bit_map;
-	std::vector<std::string> output_bit_map;
+	std::vector<char> output_bit_map;
 	char buffer[READ_BLIF_BUFFER];
 	while(1)
 	{
@@ -752,16 +752,14 @@ operation_list read_bit_map_find_unknown_gate(int input_count, nnode_t *node, FI
 			break;
 
 		bit_map.push_back(vtr::strtok(buffer,TOKENS, file, buffer));
-		output_bit_map.push_back(vtr::strtok(NULL,TOKENS, file, buffer));
+		char *tmp = vtr::strtok(NULL,TOKENS, file, buffer);
+		output_bit_map.push_back(tmp[0]);
 	}
 
 	file_line_number = last_line;
 	fsetpos(file,&pos);
 	node->orig_bit_map = bit_map;
-	
-	bit_tree_map *root = consume_bit_map_line(bit_map, output_bit_map, parent_node_name);
-	
-	node->bit_map = root;
+	node->bit_map = consume_bit_map_line(bit_map, output_bit_map, parent_node_name);
 
 	return GENERIC;
 }
