@@ -19,8 +19,8 @@ long convert_string_of_radix_to_long(char *orig_string, int radix);
 char *convert_long_to_bit_string(long orig_long, int num_bits);
 long convert_dec_string_of_size_to_long(char *orig_string, int size);
 char *convert_hex_string_of_size_to_bit_string(short is_dont_care_number, char *orig_string, int size);
-char *convert_oct_string_of_size_to_bit_string(char *orig_string, int size);
-char *convert_binary_string_of_size_to_bit_string(short is_dont_care_number, char *orig_string, int binary_size);
+char *convert_oct_string_of_size_to_bit_string(char *orig_string, long unsigned int binary_size);
+char *convert_binary_string_of_size_to_bit_string(short is_dont_care_number, char *orig_string, long unsigned int binary_size);
 
 long int my_power(long int x, long int y);
 long int pow2(int to_the_power);
@@ -30,7 +30,7 @@ std::string make_simple_name(char *input, const char *flatten_string, char flatt
 
 void *my_malloc_struct(long bytes_to_alloc);
 
-void reverse_string(char *token, int length);
+void reverse_string(char *token, long unsigned int length);
 char *append_string(const char *string, const char *appendage, ...);
 void string_to_upper(char *string);
 void string_to_lower(char *string);
@@ -59,7 +59,7 @@ int print_progress_bar(double completion, int position, int length, double time)
 
 void trim_string(char* string, const char *chars);
 bool only_one_is_true(std::vector<bool> tested);
-int odin_sprintf (char *s, const char *format, ...);
+long unsigned int odin_sprintf (char *s, const char *format, ...);
 
 void passed_verify_i_o_availabilty(struct nnode_t_t *node, int expected_input_size, int expected_output_size, const char *current_src, int line_src);
 
