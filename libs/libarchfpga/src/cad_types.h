@@ -84,6 +84,8 @@ struct t_pack_pattern_connections {
  *                          connected to a cluster-level block pin that can be drive from the preceding cluster.
  *                          If the cluster has more than one chain of this pack pattern type this vector will
  *                          have a pointer to each primitive pin that can represent a starting point for this chain.
+ *      chain_exit_pins   : this is the same as the chain root pins however it points the cout pin of the last
+ *                          adder primitive of the chain which is directly connected to the cout port of the root block
  */
 struct t_pack_patterns {
     char *name;
@@ -97,6 +99,7 @@ struct t_pack_patterns {
 
     bool is_chain;
     std::vector<t_pb_graph_pin *> chain_root_pins;
+    std::vector<t_pb_graph_pin *> chain_exit_pins;
 
     // default constructor initializing to an invalid pack pattern
     t_pack_patterns() {
