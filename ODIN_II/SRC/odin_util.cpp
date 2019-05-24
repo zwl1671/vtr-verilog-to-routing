@@ -954,25 +954,28 @@ long unsigned int odin_sprintf (char *s, const char *format, ...)
     long unsigned int sz;
 
     if (result >= 0)
+	{
 	    sz = (long unsigned int)result;
 
-    try
-    {
-        std::string temp( sz, ' ' ) ;
-        std::vsnprintf( &temp.front(), sz, format, args_copy ) ;
-        va_end(args_copy) ;
-        va_end(args) ;
+		try
+		{
+			std::string temp( sz, ' ' ) ;
+			std::vsnprintf( &temp.front(), sz, format, args_copy ) ;
+			va_end(args_copy) ;
+			va_end(args) ;
 
-        s = strncpy(s, temp.c_str(),temp.length());
+			s = strncpy(s, temp.c_str(),temp.length());
 
-		return temp.length();
+			return temp.length();
 
-    }
-    catch( const std::bad_alloc& )
-    {
-        va_end(args_copy) ;
-        va_end(args) ;
-        return 0; 
-    }
+		}
+		catch( const std::bad_alloc& )
+		{
+			sz = 0;
+		}
+	}
+	va_end(args_copy) ;
+	va_end(args) ;
+	return 0; 
 }
  
