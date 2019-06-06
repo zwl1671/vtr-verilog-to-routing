@@ -3,6 +3,7 @@
 
 #include <atomic>
 #include <thread>
+#include <assert.h>
 
 /**
  * Odin use -1 internally, so we need to go back on forth
@@ -13,23 +14,30 @@ typedef signed char data_t;
 #define BUFFER_SIZE         4   //use something divisible by 4 since the compact buffer can contain 4 value
 #define CONCURENCY_LIMIT    (BUFFER_SIZE-1)   // access to cycle -1 with an extra pdding cell
 
+#define BUFFER_ARRAY_SIZE(input_size) (((input_size/4) + ((input_size%4)?1:0)))
+
 class AtomicBuffer
 {
 private:
-	struct BitFields
-    {
-        uint8_t i0:2;
-        uint8_t i1:2;
-        uint8_t i2:2;
-        uint8_t i3:2;
-    } bits[BUFFER_SIZE/4];
+	uint8_t bits[BUFFER_ARRAY_SIZE(BUFFER_SIZE)];
 
-	std::atomic<bool> lock;
-	int32_t cycle;
+    std::atomic_flag lock = ATOMIC_FLAG_INIT;
 
-    uint8_t to_val(data_t val_in)
+	int64_t cycle;
+
+    template<typename T>
+    uint8_t to_val(T val_in)
     {
-        return (val_in == 0)? 0: (val_in == 1)? 1 : 2;
+        switch(val_in)
+        {
+            case 0:		//fallthrough
+            case '0':	return 0;
+
+            case 1:		//fallthrough
+            case '1':	return 1;
+
+            default:	return 2;
+        }
     }
 
     template<typename T>
@@ -64,113 +72,112 @@ private:
 
     void lock_it()
 	{
-        std::atomic_thread_fence(std::memory_order_acquire);
-        while(lock.exchange(true, std::memory_order_relaxed))
+        uint8_t count = 0;
+        while(lock.test_and_set(std::memory_order_acquire))
         {
-            std::this_thread::yield();
+            count = (count + 1) % ((uint8_t)128);
+            if(!count)
+                std::this_thread::yield();
         }
 	}
 
 	void unlock_it()
 	{
-        lock.exchange(false, std::memory_order_relaxed);
-        std::atomic_thread_fence(std::memory_order_relaxed);
+        lock.clear(std::memory_order_release); 
 	}
 
-	uint8_t get_bits(int64_t index)
+    template<typename CYCLE_T>
+    uint8_t get_addr(CYCLE_T in)
+    {
+        int64_t cycle_in = static_cast<int64_t>(in) % static_cast<int64_t>(size());
+        uint8_t casted_addr = static_cast<uint8_t>(cycle_in);
+        return (casted_addr/4);
+    }
+
+    template<typename CYCLE_T>
+    uint8_t get_index(CYCLE_T in)
+    {
+        int64_t cycle_in = static_cast<int64_t>(in) % static_cast<int64_t>(size());
+        uint8_t casted_addr = static_cast<uint8_t>(cycle_in);
+        return (uint8_t)((casted_addr%4) * 2);
+    }
+
+    template<typename CYCLE_T>
+	data_t get_bits(CYCLE_T index)
 	{
-		uint8_t modindex = (uint8_t)(index%(BUFFER_SIZE));
-	    uint8_t address = modindex/4;
-	    uint8_t bit_index = modindex%4;
-	    switch(bit_index)
-	    {
-	    	case 0:	return (uint8_t)(this->bits[address].i0);
-	    	case 1:	return (uint8_t)(this->bits[address].i1);
-	    	case 2: return (uint8_t)(this->bits[address].i2);
-	    	case 3:	return (uint8_t)(this->bits[address].i3);
-			default: return (uint8_t)0x3;
-	    }
+        uint8_t addr = get_addr(index);
+        uint8_t id = get_index(index);
+        uint8_t bitset = bits[addr];
+
+        bitset = (uint8_t)(bitset >> id);
+        bitset = (uint8_t)(bitset & 0x3);
+
+        return val(bitset);
 	}
 	
-	void set_bits(int64_t index, uint8_t value)
+    template<typename CYCLE_T, typename VAL_T>
+	void set_bits(CYCLE_T index, VAL_T value)
 	{
-		uint8_t modindex = (uint8_t)(index%(BUFFER_SIZE));
-	    uint8_t address = modindex/4;
-	    uint8_t bit_index = modindex%4;
-	    
-	    value = value&0x3;
-	    
-	    switch(bit_index)
-	    {
-	    	case 0:	this->bits[address].i0 = (uint8_t)(value&0x3); break;
-	    	case 1:	this->bits[address].i1 = (uint8_t)(value&0x3); break;
-	    	case 2: this->bits[address].i2 = (uint8_t)(value&0x3); break;
-	    	case 3:	this->bits[address].i3 = (uint8_t)(value&0x3); break;
-			default: break;
-	    }
+        uint8_t addr = get_addr(index);
+        uint8_t id = get_index(index);
+        uint8_t value_in = to_val(value);
+
+        uint8_t reset_mask = (uint8_t)(0x3);
+        reset_mask = (uint8_t)(reset_mask << id);
+        reset_mask = (uint8_t)(~reset_mask);
+
+        value_in = (uint8_t)(value_in << id);
+
+        bits[addr] = (uint8_t)(bits[addr] & reset_mask);
+        bits[addr] = (uint8_t)(bits[addr] | value_in);
 	}
+
+    void lock_free_update_cycle( int64_t cycle_in)
+    {
+        assert(is_greater_cycle(cycle_in));
+        this->cycle = cycle_in;
+    }
+
+    bool is_greater_cycle(int64_t cycle_in)
+    {
+        return (cycle_in >= this->cycle);
+    }
+
 public:
 
     AtomicBuffer(data_t value_in)
     {
-        this->lock = false;
         this->cycle = -1;
-        this->init_all_values(value_in);
+        for(size_t i=0; i<size(); i++)
+            set_bits( i, value_in);
+    }
+
+    uint8_t size()
+    {
+        return (BUFFER_ARRAY_SIZE(BUFFER_SIZE)*4);
     }
 
     void print()
     {
-        for(int i=0; i<BUFFER_SIZE; i++)
+        for(size_t i=0; i<size(); i++)
             printf("%c",val_c(get_bits(i)));
         
         printf("\n");
     }
 
-    void init_all_values( data_t value)
+    void init_all_values( data_t value_in)
     {
-    	this->lock = false;
-        for(int i=0; i<BUFFER_SIZE; i++)
-            set_bits( i, to_val(value));
-    }
+        lock_it();
+        for(size_t i=0; i<size(); i++)
+            set_bits( i, value_in);
+        unlock_it();
 
-    int64_t lock_free_get_cycle()
-    {
-        return (int64_t)this->cycle;
-    }
-
-    void lock_free_update_cycle( int64_t cycle_in)
-    {
-        //if (cycle_in > this->cycle)
-        this->cycle = (int32_t)cycle_in;
-    }
-
-    data_t lock_free_get_value( int64_t cycle_in)
-    {
-        return val(get_bits( cycle_in));
-    }
-
-    void lock_free_update_value( data_t value_in, int64_t cycle_in)
-    {
-        if (cycle_in > this->cycle)
-        {
-            set_bits( cycle_in, to_val(value_in) );
-            lock_free_update_cycle( cycle_in);
-        }
-    }
-
-    void lock_free_copy_foward_one_cycle( int64_t cycle_in)
-    {
-        if (cycle_in > this->cycle)
-        {
-            set_bits( cycle_in+1, get_bits(cycle_in) );
-            lock_free_update_cycle( cycle_in );
-        }
     }
 
     int64_t get_cycle()
     {
 		lock_it();
-		int64_t value = lock_free_get_cycle();
+		int64_t value = this->cycle;
         unlock_it();
         return value;
     }
@@ -185,7 +192,7 @@ public:
     data_t get_value( int64_t cycle_in)
     {
 		lock_it();
-    	data_t value = lock_free_get_value( cycle_in);
+    	data_t value = get_bits( cycle_in);
         unlock_it();
         return value;
     }
@@ -193,18 +200,12 @@ public:
     void update_value( data_t value_in, int64_t cycle_in)
     {
 		lock_it();
-        lock_free_update_value( value_in, cycle_in);
-        unlock_it();
-
-    }
-
-    void copy_foward_one_cycle( int64_t cycle_in)
-    {
-		lock_it();
-        lock_free_copy_foward_one_cycle( cycle_in);
+        lock_free_update_cycle( cycle_in );
+        set_bits( cycle_in, value_in );
         unlock_it();
     }
     
 };
 
 #endif
+

@@ -60,14 +60,55 @@ _FORCE_SIM="off"
 # Exit Functions
 function exit_program() {
 
+	failed_dir=${NEW_RUN_DIR}/simulation_failures
+	log_file="${failed_dir}.log"
+
+	if [ -f ${log_file} ]
+	then
+		echo "Simulation failures"
+
+		for failed_benchmark in $(cat ${log_file})
+		do
+			target_dir=$(dirname ${failed_dir}/${failed_benchmark})
+			target_link=$(basename ${failed_benchmark})
+
+			echo ${target_dir}/${target_link}
+
+			mkdir -p ${target_dir}
+			if [ ! -e ${target_dir}/${target_link} ]; then
+				ln -s ${NEW_RUN_DIR}/${failed_benchmark} ${target_dir}/${target_link}
+			fi
+			
+			FAILURE=$(( ${FAILURE} + 1 ))
+		done
+	fi
+
+	failed_dir=${NEW_RUN_DIR}/synthesis_failures
+	log_file="${failed_dir}.log"
+
+	if [ -f ${log_file} ]
+	then
+		echo "Synthesis failures"
+
+		for failed_benchmark in $(cat ${log_file})
+		do
+			target_dir=$(dirname ${failed_dir}/${failed_benchmark})
+			target_link=$(basename ${failed_benchmark})
+
+			echo ${target_dir}/${target_link}
+
+			mkdir -p ${target_dir}
+			if [ ! -e ${target_dir}/${target_link} ]; then
+				ln -s ${NEW_RUN_DIR}/${failed_benchmark} ${target_dir}/${target_link}
+			fi
+			
+			FAILURE=$(( ${FAILURE} + 1 ))
+		done
+	fi
+
 	if [ "_${FAILURE}" != "_0" ]
 	then
 		echo "Failed ${FAILURE} benchmarks"
-		echo ""
-		cat ${NEW_RUN_DIR}/test_failures.log
-		echo ""
-		echo "View Failure log in ${NEW_RUN_DIR}/test_failures.log"
-
 	else
 		echo "no run failure!"
 	fi
@@ -85,7 +126,7 @@ function ctrl_c() {
 		pkill odin_II &> /dev/null
 		pkill ${THIS_SCRIPT_EXEC} &> /dev/null
 		#should be dead by now
-		exit 120
+		exit_program ${FAILURE}
 	done
 }
 
@@ -211,27 +252,6 @@ function cleanup_temp() {
 		unlink regression_test/latest || /bin/true
 	fi
 
-}
-
-function mv_failed() {
-	failed_dir=$1
-	log_file="${failed_dir}.log"
-
-	if [ -e ${log_file} ]
-	then
-		for failed_benchmark in $(cat ${log_file})
-		do
-			target_dir=$(dirname ${failed_dir}/${failed_benchmark})
-			target_link=$(basename ${failed_benchmark})
-
-			mkdir -p ${target_dir}
-			echo "Linking failed benchmark ${failed_benchmark} -> in failures ${target_link}"
-
-			ln -s ${NEW_RUN_DIR}/${failed_benchmark} ${target_dir}/${target_link}
-			FAILURE=$(( ${FAILURE} + 1 ))
-		done
-		cat ${log_file} >> ${NEW_RUN_DIR}/test_failures.log
-	fi
 }
 
 #########################################
@@ -503,7 +523,7 @@ function sim() {
 	if [ "_${with_custom_args}" == "_1" ]
 	then
 
-		global_odin_failure="${NEW_RUN_DIR}/odin_failures"
+		global_odin_failure="${NEW_RUN_DIR}/synthesis_failures"
 
 		for dir in ${benchmark_dir}/*
 		do
@@ -542,7 +562,6 @@ function sim() {
 		#run the custon command
 		echo " ========= Synthesizing Circuits"
 		find ${NEW_RUN_DIR}/${bench_type}/ -name odin_param | xargs -n1 -P$threads -I test_cmd ${SHELL} -c '$(cat test_cmd)'
-		mv_failed ${global_odin_failure}
 
 	############################################
 	# run benchmarks
@@ -666,7 +685,6 @@ function sim() {
 		then
 			echo " ========= Synthesizing Circuits"
 			find ${NEW_RUN_DIR}/${bench_type}/ -name cmd_param | xargs -n1 -P$threads -I test_cmd ${SHELL} -c '$(cat test_cmd)'
-			mv_failed ${global_synthesis_failure}
 		fi
 
 		if [ "${_SIMULATE}" == "on" ]
@@ -708,9 +726,6 @@ function sim() {
 				mv ${sim_output_vectors} ${BM_DIR}/${BM_NAME}
 
 			done
-
-			# move the failed runs
-			mv_failed ${global_simulation_failure}
 		fi
 
 	fi
