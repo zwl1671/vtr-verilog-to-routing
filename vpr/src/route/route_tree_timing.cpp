@@ -60,6 +60,7 @@ bool verify_route_tree_recurr(t_rt_node* node, std::set<int>& seen_nodes);
 
 t_rt_node* prune_route_tree_recurr(t_rt_node* node, CBRR& connections_inf, bool congested);
 
+t_rt_node* traceback_to_route_tree(t_trace* head);
 static t_trace* traceback_to_route_tree_branch(t_trace* trace, std::map<int, t_rt_node*>& rr_node_to_rt);
 
 static std::pair<t_trace*, t_trace*> traceback_from_route_tree_recurr(t_trace* head, t_trace* tail, const t_rt_node* node);
@@ -608,10 +609,9 @@ void free_route_tree(t_rt_node* rt_node) {
         free_linked_rt_edge(rt_edge);
         rt_edge = next_edge;
     }
-
-    if (!rr_node_to_rt_node.empty()) {
-        rr_node_to_rt_node.at(rt_node->inode) = nullptr;
-    }
+    
+    if (!rr_node_to_rt_node.empty())
+        rr_node_to_rt_node[rt_node->inode] = nullptr;
     free_rt_node(rt_node);
 }
 
@@ -691,6 +691,8 @@ t_rt_node* traceback_to_route_tree(t_trace* head) {
         trace = traceback_to_route_tree_branch(trace, rr_node_to_rt);
     }
 
+    rr_node_to_rt[head->index]->parent_node = nullptr;
+    rr_node_to_rt[head->index]->parent_switch = OPEN;
     return rr_node_to_rt[head->index];
 }
 
