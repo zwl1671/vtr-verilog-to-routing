@@ -22,7 +22,7 @@ ast_node_t *free_whole_tree(ast_node_t *node);
 ast_node_t *free_single_node(ast_node_t *node);
 void free_assignement_of_node_keep_tree(ast_node_t *node);
 
-char *make_module_param_name(STRING_CACHE *defines_for_module_sc, ast_node_t *module_param_list, char *module_name);
+char *make_module_param_name(STRING_CACHE *defines_sc, ast_node_t *module_param_list, char *module_name);
 void make_concat_into_list_of_strings(ast_node_t *concat_top, char *instance_name_prefix);
 void change_to_number_node(ast_node_t *node, long number);
 
@@ -35,7 +35,7 @@ ast_node_t *resolve_node(STRING_CACHE *local_param_table_sc, char *module_name, 
 ast_node_t *resolve_ast_node(STRING_CACHE *local_param_table_sc, short initial, char *module_name, ast_node_t *node);
 ast_node_t *node_is_constant(ast_node_t *node);
 ast_node_t *node_is_ast_constant(ast_node_t *node);
-ast_node_t *node_is_ast_constant(ast_node_t *node, STRING_CACHE *defines_for_module_sc);
+ast_node_t *node_is_ast_constant(ast_node_t *node, STRING_CACHE *defines_sc);
 ast_node_t * fold_binary(ast_node_t *node);
 ast_node_t *fold_unary(ast_node_t *node);
 

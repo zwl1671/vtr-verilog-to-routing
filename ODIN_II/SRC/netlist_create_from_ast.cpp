@@ -70,9 +70,6 @@ STRING_CACHE *function_local_symbol_table_sc = NULL;
 ast_node_t** function_local_symbol_table = NULL;
 int function_num_local_symbol_table = 0;
 
-signal_list_t *local_clock_list = NULL;
-int local_clock_idx = -1;
-
 /* CONSTANT NET ELEMENTS */
 char *one_string = NULL;
 char *zero_string = NULL;
@@ -427,22 +424,6 @@ void init_local_symbol()
 	local_symbol_table_sc = sc_new_string_cache();
 }
 
-void cleanup_local_clock_list()
-{
-	if(local_clock_list)
-	{
-		free_signal_list(local_clock_list);
-		local_clock_list = NULL;
-	}
-
-	local_clock_idx = -1;
-}
-
-void init_local_clock_list()
-{
-	cleanup_local_clock_list();
-}
-
 /*---------------------------------------------------------------------------------------------
  * (function: create_netlist)
  *--------------------------------------------------------------------------*/
@@ -790,6 +771,7 @@ signal_list_t *netlist_expand_ast_of_module(ast_node_t* node, char *instance_nam
 	short skip_children = FALSE; // skips the DFS completely if TRUE
 	signal_list_t *return_sig_list = NULL;
 	signal_list_t **children_signal_list = NULL;
+	signal_list_t *local_clock_list = NULL;
 
 	if (node == NULL)
 	{
@@ -969,9 +951,6 @@ signal_list_t *netlist_expand_ast_of_module(ast_node_t* node, char *instance_nam
 			}
 			/* ---------------------- */
 			case ASSIGN:
-				/* combinational path */
-				type_of_circuit = COMBINATIONAL;
-				circuit_edge = UNDEFINED_SENSITIVITY;
 				break;
 			case BLOCKING_STATEMENT:
 			case NON_BLOCKING_STATEMENT:
@@ -984,6 +963,7 @@ signal_list_t *netlist_expand_ast_of_module(ast_node_t* node, char *instance_nam
 			case ALWAYS:
 				/* evaluate if this is a sensitivity list with posedges/negedges (=SEQUENTIAL) or none (=COMBINATIONAL) */
 				local_clock_list = evaluate_sensitivity_list(node->children[0], instance_name_prefix);
+				type_of_circuit = SEQUENTIAL;
 				child_skip_list[0] = TRUE;
 				break;
 			case CASE:
@@ -1102,10 +1082,11 @@ signal_list_t *netlist_expand_ast_of_module(ast_node_t* node, char *instance_nam
 					}
 
 				}
-
-				cleanup_local_clock_list();
-					
+				free_signal_list(local_clock_list);
+				type_of_circuit = COMBINATIONAL;
+				circuit_edge = UNDEFINED_SENSITIVITY;
 				break;
+
 			case BINARY_OPERATION:
 				oassert(node->num_children == 2);
 				return_sig_list = create_operation_node(node, children_signal_list, node->num_children, instance_name_prefix);
@@ -3746,73 +3727,66 @@ void define_latchs_initial_value_inside_initial_statement(ast_node_t *initial_no
 void terminate_registered_assignment(ast_node_t *always_node, signal_list_t* assignment, signal_list_t *potential_clocks, char * /*instance_name_prefix*/)
 {
 	oassert(potential_clocks != NULL);
-
+	
+	npin_t *local_clock_pin = NULL;
 	npin_t **list_dependence_pin = (npin_t **)vtr::calloc(assignment->count,sizeof(npin_t *));
 	ids *list_dependence_type = (ids *)vtr::calloc(assignment->count,sizeof(ids));
 	/* figure out which one is the clock */
-	if (local_clock_idx < 0)
+
+	if(potential_clocks->count == 0)
 	{
-		if(potential_clocks->count == 1)
-		{
-			/* If this element is the only item in the sensitivity list then its the clock */
-			local_clock_idx = 0;
-		}
-		else
-		{
-			int i;
-			for (i = 0; i < potential_clocks->count; i++)
-			{
-				nnet_t *temp_net;
-				/* searching for the clock with no net */
-				long sc_spot = sc_lookup_string(output_nets_sc, potential_clocks->pins[i]->name);
-				if (sc_spot == -1)
-				{
-					sc_spot = sc_lookup_string(input_nets_sc, potential_clocks->pins[i]->name);
-					if (sc_spot == -1)
-					{
-						error_message(NETLIST_ERROR, always_node->line_number, always_node->file_number,
-								"Sensitivity list element (%s) is not a driver or net ... must be\n", potential_clocks->pins[i]->name);
-					}
-					temp_net = (nnet_t*)input_nets_sc->data[sc_spot];
-				}
-				else
-				{
-					temp_net = (nnet_t*)output_nets_sc->data[sc_spot];
-				}
-
-
-				if (
-				(((temp_net->num_fanout_pins == 1) && (temp_net->fanout_pins[0]->node == NULL)) 
-					|| (temp_net->num_fanout_pins == 0))
-				&& (local_clock_idx >= 0))
-				{
-					error_message(NETLIST_ERROR, always_node->line_number, always_node->file_number,
-							"Suspected second clock (%s).  In a sequential sensitivity list, Odin expects the "
-							"clock not to drive anything and any other signals in this list to drive stuff.  "
-							"For example, a reset in the sensitivy list has to be hooked up to something in the always block.\n",
-							potential_clocks->pins[i]->name);
-				}
-				else if (temp_net->num_fanout_pins == 0)
-				{
-					/* If this element is in the sensitivity list and doesn't drive anything it's the clock */
-					local_clock_idx = i;
-				}
-				else if ((temp_net->num_fanout_pins == 1) && (temp_net->fanout_pins[0]->node == NULL))
-				{
-					/* If this element is in the sensitivity list and doesn't drive anything it's the clock */
-					local_clock_idx = i;
-				}
-			}
-		}
+		error_message(NETLIST_ERROR, always_node->line_number, always_node->file_number,
+			"%s","Sensitivity list is empty, cannot find a driver for this always block\n");		
 	}
-
-	npin_t *local_clock_pin = NULL;
-
-	if(local_clock_idx >= 0)
+	else if(potential_clocks->count == 1)
 	{
-		local_clock_pin = potential_clocks->pins[local_clock_idx];
+		/* If this element is the only item in the sensitivity list then its the clock */
+		local_clock_pin = potential_clocks->pins[0];
 	}
 	else
+	{
+		/**
+		 * multiple driver found for this block, 
+		 * we drive individual latch from each input and xor them together 
+		 * this will be the driver for an asynchronous latch.
+		 * since we cannot synthesize propagation delay, the latch must be asynchronous
+		 * as only with delay can we switch both edges into posedge triggers.
+		 * 
+		 * Sadly this means that we cannot use implicit ram for these types of circuit
+		 * If the user wants to make an implicit ram, 
+		 * it must be built using a single driver for the always block
+		 * i.e. always @(posedge clk)
+		 * 
+		 * always @(negedge rst, posedge clk)
+		 * will always have to build circuitry and be evaluated using an async latch
+		 */
+		int i;
+		for (i = 0; i < potential_clocks->count; i++)
+		{
+			// deal with all potential_clocks->pins[i]
+
+			/**
+			 * Combining edges to build multi edge support
+			 * Although latched circuits are bad, we need to support them
+			 * as they synthesizable
+			 * 
+			 *           .--o<|---.
+			 *           |  ____  |
+			 *           '--|  |--'--.
+			 *  trigger  ---|> |     |  (xor)
+			 *              ````     '``\\'',___ combined clock to async latch
+			 *                       .--//,,'
+			 *           .--o<|---.  |
+			 *           |  ____  |  |
+			 *           '--|  |--'--'
+			 *  trigger  ---|> |
+			 * 				````    
+			 */
+		}
+	}
+
+	
+	if(local_clock_pin == NULL)
 	{
 		error_message(NETLIST_ERROR, always_node->line_number, always_node->file_number,
 				"%s\n", "No clock found"
@@ -3825,7 +3799,15 @@ void terminate_registered_assignment(ast_node_t *always_node, signal_list_t* ass
 	for (i = 0; i < assignment->count; i++)
 	{
 		npin_t *pin = assignment->pins[i];
-		implicit_memory *memory = lookup_implicit_memory_input(pin->name);
+		implicit_memory *memory = NULL;
+
+		/* implicit memories only when it is a rising edge and we only have one driver */
+		if( potential_clocks->count == 1 
+		&& local_clock_pin->sensitivity == RISING_EDGE_SENSITIVITY)
+		{
+			memory = lookup_implicit_memory_input(pin->name);
+		}
+
 		if (memory)
 		{
 			add_pin_to_signal_list(memory_inputs, pin);
@@ -3941,6 +3923,7 @@ void terminate_registered_assignment(ast_node_t *always_node, signal_list_t* ass
             }
 		}
 	}
+
 	vtr::free(list_dependence_pin);
 	vtr::free(list_dependence_type);
 	for (i = 0; i < memory_inputs->count; i++)
@@ -3971,6 +3954,7 @@ void terminate_registered_assignment(ast_node_t *always_node, signal_list_t* ass
 			memory->clock_added = TRUE;
 		}
 	}
+
 	free_signal_list(memory_inputs);
 
 	free_signal_list(assignment);
@@ -4525,8 +4509,6 @@ signal_list_t *evaluate_sensitivity_list(ast_node_t *delay_control, char *instan
 		return_sig_list = NULL;
 	}
 
-	type_of_circuit = SEQUENTIAL;
-
 	return return_sig_list;
 }
 
@@ -4661,10 +4643,6 @@ void create_if_control_signals(ast_node_t *if_expression, nnode_t *if_node, char
 	/* get the output pin of the not gate .... also adds a net inbetween and the linking output pin to node and net */
 	out_pin_list = make_output_pins_for_existing_node(not_node, 1);
 	oassert(out_pin_list->count == 1);
-
-
-	// Mark the else condition for the simulator.
-	out_pin_list->pins[0]->is_default = TRUE;
 
 	/* copy that output pin to be put into the default */
 	add_input_pin_to_node(if_node, out_pin_list->pins[0], 1);
@@ -4803,9 +4781,6 @@ void create_case_control_signals(ast_node_t *case_list_of_items, ast_node_t *com
 			default_node = make_1port_logic_gate_with_inputs(LOGICAL_NOR, case_list_of_items->num_children-1, other_expressions_pin_list, case_node, -1);
 			default_expression = make_output_pins_for_existing_node(default_node, 1);
 
-			// Mark the "default" case for simulation.
-			default_expression->pins[0]->is_default = TRUE;
-
 			/* copy that output pin to be put into the default */
 			add_input_pin_to_node(case_node, default_expression->pins[0], i);
 
@@ -4941,17 +4916,24 @@ signal_list_t *create_mux_statements(signal_list_t **statement_lists, nnode_t *m
 			}
 			else
 			{
+				/**
+				 * TODO: This seems wrong, implie zero for implicit memories ?
+				 * * also checking edges here makes little sense if we combined the top clocks
+				 *  
+				 */
 				/* Don't match, so this signal is an IMPLIED SIGNAL !!! */
 				npin_t *pin = combined_lists->pins[i];
 
 				switch(circuit_edge)
 				{
-					case RISING_EDGE_SENSITIVITY: //fallthrough
-					case FALLING_EDGE_SENSITIVITY:
+					case RISING_EDGE_SENSITIVITY:
 					{
 						/* implied signal for mux */
 						if (lookup_implicit_memory_input(pin->name))
 						{
+							/** 
+							 * TODO: why ??
+							 */
 							// If the mux feeds an implicit memory, imply zero.
 							add_input_pin_to_node(mux_node, get_zero_pin(verilog_netlist), pin_index);
 						}
@@ -4967,12 +4949,24 @@ signal_list_t *create_mux_statements(signal_list_t **statement_lists, nnode_t *m
 						}
 						break;
 					}
+					case FALLING_EDGE_SENSITIVITY:
+					{
+						/* lookup this driver name */
+						signal_list_t *this_pin_list = create_pins(NULL, pin->name, instance_name_prefix);
+						oassert(this_pin_list->count == 1);
+						//add_a_input_pin_to_node_spot_idx(mux_node, get_zero_pin(verilog_netlist), pin_index);
+						add_input_pin_to_node(mux_node, this_pin_list->pins[0], pin_index);
+						/* clean up */
+						free_signal_list(this_pin_list);
+						break;
+					}
 					case ASYNCHRONOUS_SENSITIVITY:
 					{
-						/* DON'T CARE - so hookup zero */
+						/**
+						 * DON'T CARE -  - so hookup zero 
+						 * TODO: should'nt we ?
+						*/
 						add_input_pin_to_node(mux_node, get_zero_pin(verilog_netlist), pin_index);
-						// Allows the simulator to be aware of the implied nature of this signal.
-						mux_node->input_pins[pin_index]->is_implied = TRUE;
 						break;
 					}
 					default:

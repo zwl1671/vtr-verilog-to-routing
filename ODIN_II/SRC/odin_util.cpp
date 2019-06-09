@@ -72,7 +72,17 @@ std::string get_file_extension(std::string input_file)
  *-------------------------------------------------------------------------------------------*/
 const char *name_based_on_op(operation_list op)
 {
-	return operation_list_STR[op][ODIN_STRING_TYPE];
+	if(op < operation_list_END)
+	{
+		return operation_list_STR[op][ODIN_STRING_TYPE];
+	}
+	else
+	{
+		error_message(PARSE_ERROR, -1, -1, 
+			"%s", "Invalid operation type defined, unable to continue");
+
+		return NULL;
+	}
 }
 
 /*---------------------------------------------------------------------------------------------
@@ -83,6 +93,74 @@ const char *node_name_based_on_op(nnode_t *node)
 {
 	return name_based_on_op(node->type);
 }
+
+operation_list op_based_on_name(const char *input)
+{
+	operation_list my_op = NO_OP;
+	while( my_op < operation_list_END )
+	{
+		// we have to compare short form and long form
+		if(	(0 == strcmp(operation_list_STR[my_op][0], input))
+		||	(0 == strcmp(operation_list_STR[my_op][1], input)))
+		{	
+			break;
+		}
+		else
+		{
+			my_op = (operation_list)(((int)my_op) + 1);
+		}
+		
+	}
+	return my_op;
+}
+
+/*---------------------------------------------------------------------------------------------
+ * (function: node_name_based_on_op)
+ * 	Get the string version of a node
+ *-------------------------------------------------------------------------------------------*/
+const char *name_based_on_edge(edge_type_e sensitivity_kind)
+{
+	if(sensitivity_kind < edge_type_e_END)
+	{
+		return edge_type_e_STR[sensitivity_kind];
+	}
+	else
+	{
+		error_message(PARSE_ERROR, -1, -1, 
+			"%s", "Invalid edge kind type defined, unable to continue");
+		
+		return NULL;
+
+	}
+}
+
+/*---------------------------------------------------------------------------------------------
+ * (function: node_name_based_on_op)
+ * 	Get the string version of a node
+ *-------------------------------------------------------------------------------------------*/
+const char *node_name_based_on_edge(nnode_t *node)
+{
+	return name_based_on_edge(node->edge_type);
+}
+
+edge_type_e edge_based_on_name(const char *input)
+{
+	edge_type_e my_edge = UNDEFINED_SENSITIVITY;
+	while( my_edge < edge_type_e_END )
+	{
+		// we have to compare short form and long form
+		if(0 == strcmp(edge_type_e_STR[my_edge], input))
+		{	
+			break;
+		}
+		else
+		{
+			my_edge = (edge_type_e)(((int)my_edge) + 1);
+		}
+	}
+	return my_edge;
+}
+
 
 /*--------------------------------------------------------------------------
  * (function: make_signal_name)
@@ -960,30 +1038,64 @@ bool only_one_is_true(std::vector<bool> tested)
  */
 int odin_sprintf (char *s, const char *format, ...)
 {
-    va_list args, args_copy ;
-    va_start( args, format ) ;
-    va_copy( args_copy, args ) ;
+	if(s && format)
+	{
+		va_list args, args_copy ;
+		va_start( args, format ) ;
+		va_copy( args_copy, args ) ;
 
-    const auto sz = std::vsnprintf( nullptr, 0, format, args ) + 1 ;
+		const auto sz = std::vsnprintf( nullptr, 0, format, args ) + 1 ;
 
-    try
-    {
-        std::string temp( sz, ' ' ) ;
-        std::vsnprintf( &temp.front(), sz, format, args_copy ) ;
-        va_end(args_copy) ;
-        va_end(args) ;
+		try
+		{
+			std::string temp( sz, ' ' ) ;
+			std::vsnprintf( &temp.front(), sz, format, args_copy ) ;
+			va_end(args_copy) ;
+			va_end(args) ;
 
-        s = strncpy(s, temp.c_str(),temp.length());
+			s = strncpy(s, temp.c_str(),temp.length()+1);
 
-		return temp.length();
+			return temp.length();
 
-    }
-    catch( const std::bad_alloc& )
-    {
-        va_end(args_copy) ;
-        va_end(args) ;
-        return -BUFFER_MAX_SIZE;
-    }
+		}
+		catch( const std::bad_alloc& )
+		{
+			va_end(args_copy) ;
+			va_end(args) ;
+		}
+	}
+	return -BUFFER_MAX_SIZE;
 
 }
+
+char *odin_strgen(const char *format, ...)
+{
+	if(format)
+	{
+		va_list args, args_copy ;
+		va_start( args, format ) ;
+		va_copy( args_copy, args ) ;
+
+		const auto sz = std::vsnprintf( nullptr, 0, format, args ) + 1 ;
+
+		try
+		{
+			std::string temp( sz, ' ' ) ;
+			std::vsnprintf( &temp.front(), sz, format, args_copy ) ;
+			va_end(args_copy) ;
+			va_end(args) ;
+
+			return strdup(temp.c_str());
+		}
+		catch( const std::bad_alloc& )
+		{
+			va_end(args_copy) ;
+			va_end(args) ;
+		}
+	}
+	
+	return NULL;
+
+}
+
  

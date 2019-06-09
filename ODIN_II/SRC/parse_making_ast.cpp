@@ -41,36 +41,40 @@ OTHER DEALINGS IN THE SOFTWARE.
 extern int yylineno;
 
 //for module
-STRING_CACHE **defines_for_module_sc;
-STRING_CACHE *modules_inputs_sc;
-STRING_CACHE *modules_outputs_sc;
+STRING_CACHE **defines_for_module_sc = NULL;
+STRING_CACHE *modules_inputs_sc = NULL;
+STRING_CACHE *modules_outputs_sc = NULL;
 //for function
-STRING_CACHE **defines_for_function_sc;
-STRING_CACHE *functions_inputs_sc;
-STRING_CACHE *functions_outputs_sc;
+STRING_CACHE **defines_for_function_sc = NULL;
+STRING_CACHE *functions_inputs_sc = NULL;
+STRING_CACHE *functions_outputs_sc = NULL;
 
-STRING_CACHE *module_names_to_idx;
+STRING_CACHE *module_names_to_idx = NULL;
 
-ast_node_t **block_instantiations_instance;
-int size_block_instantiations;
+ast_node_t **block_instantiations_instance = NULL;
+int size_block_instantiations = 0;
 
-ast_node_t **module_instantiations_instance;
-int size_module_instantiations;
-ast_node_t **module_variables_not_defined;
-int size_module_variables_not_defined;
-ast_node_t **function_instantiations_instance;
-int size_function_instantiations;
-ast_node_t **function_instantiations_instance_by_module;
-int size_function_instantiations_by_module;
+ast_node_t **module_instantiations_instance = NULL;
+int size_module_instantiations = 0;
 
-long num_modules;
-long num_instances;
-ast_node_t **ast_modules;
+ast_node_t **module_variables_not_defined = NULL;
+int size_module_variables_not_defined = 0;
 
-int num_functions;
-ast_node_t **ast_functions;
-ast_node_t **all_file_items_list;
-int size_all_file_items_list;
+ast_node_t **function_instantiations_instance = NULL;
+int size_function_instantiations = 0;
+
+ast_node_t **function_instantiations_instance_by_module = NULL;
+int size_function_instantiations_by_module = 0;
+
+ast_node_t **ast_modules = NULL;
+long num_modules = 0;
+long num_instances = 0;
+
+ast_node_t **ast_functions = NULL;
+int num_functions = 0;
+
+ast_node_t **all_file_items_list = NULL;
+int size_all_file_items_list = 0;
 
 short to_view_parse;
 
@@ -174,12 +178,14 @@ void parse_to_ast()
 		/* parse next file */
 		yyparse();
 
+		cleanup_parser_for_file();
 		fclose(yyin);
 		current_parse_file++;
 	}
 
 	/* clean up all the structures in the parser */
 	cleanup_veri_preproc();
+	cleanup_parser();
 
 	/* for error messages - this is in case we use any of the parser functions after parsing (i.e. create_case_control_signals()) */
 	current_parse_file = -1;
@@ -261,9 +267,9 @@ void cleanup_parser()
 	long i;
 
 	/* frees all the defines for module string caches (used for parameters) */
-	if (num_modules > 0)
+	if (num_modules >= 0)
 	{
-		for (i = 0; i < num_modules; i++)
+		for (i = 0; i <= num_modules; i++)
 		{
 			sc_free_string_cache(defines_for_module_sc[i]);
 		}
@@ -294,10 +300,10 @@ void init_parser_for_file()
 void cleanup_parser_for_file()
 {
 	/* create string caches to hookup PORTS with INPUT and OUTPUTs.  This is made per module and will be cleaned and remade at next_module */
-	modules_inputs_sc = sc_free_string_cache(modules_inputs_sc);
-	modules_outputs_sc = sc_free_string_cache(modules_outputs_sc);
-	functions_inputs_sc = sc_free_string_cache(functions_inputs_sc);
-	functions_outputs_sc = sc_free_string_cache(functions_outputs_sc);
+	if(modules_inputs_sc) 		modules_inputs_sc = sc_free_string_cache(modules_inputs_sc);
+	if(modules_outputs_sc) 		modules_outputs_sc = sc_free_string_cache(modules_outputs_sc);
+	if(functions_inputs_sc) 	functions_inputs_sc = sc_free_string_cache(functions_inputs_sc);
+	if(functions_outputs_sc) 	functions_outputs_sc = sc_free_string_cache(functions_outputs_sc);
 }
 
 /*---------------------------------------------------------------------------------------------

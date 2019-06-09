@@ -69,6 +69,31 @@ npin_t *get_one_pin(netlist_t *netlist)
 	return one_fanout_pin;
 }
 
+/*---------------------------------------------------------------------------------------------
+ * (function: make_nport_logic_gates)
+ * 	Make a n port gate with variable sizes.  The first port will be input_pins index 0..width_port1.
+ *-------------------------------------------------------------------------------------------*/
+static nnode_t *generic_make_nport_gate(operation_list type, std::vector<int> widths, int width_output, nnode_t *node, short mark)
+{
+    int i;
+	nnode_t *logic_node = allocate_nnode();
+	logic_node->traverse_visited = mark;
+	logic_node->type = type;
+	logic_node->name = node_name(logic_node, node->name);
+	logic_node->related_ast_node = node->related_ast_node;
+
+	/* add the input ports as needed */
+    for(i = 0; i < widths.size(); i++) {
+    	allocate_more_input_pins(logic_node, widths[i]);
+	    add_input_port_information(logic_node, widths[i]);
+    }
+
+	/* add output */
+	allocate_more_output_pins(logic_node, width_output);
+	add_output_port_information(logic_node, width_output);
+
+	return logic_node;
+}
 
 /*---------------------------------------------------------------------------------------------
  * (function: make_not_gate_with_input)
@@ -76,9 +101,7 @@ npin_t *get_one_pin(netlist_t *netlist)
  *-------------------------------------------------------------------------------------------*/
 nnode_t *make_not_gate_with_input(npin_t *input_pin, nnode_t *node, short mark)
 {
-	nnode_t *logic_node;
-
-	logic_node = make_not_gate(node, mark);
+	nnode_t *logic_node = make_not_gate(node, mark);
 
 	/* add the input ports as needed */
 	add_input_pin_to_node(logic_node, input_pin, 0);
@@ -93,19 +116,7 @@ nnode_t *make_not_gate_with_input(npin_t *input_pin, nnode_t *node, short mark)
  *-----------------------------------------------------------------------*/
 nnode_t *make_not_gate(nnode_t *node, short mark)
 {
-	nnode_t *logic_node;
-
-	logic_node = allocate_nnode();
-	logic_node->traverse_visited = mark;
-	logic_node->type = LOGICAL_NOT;
-	logic_node->name = node_name(logic_node, node->name);
-	logic_node->related_ast_node = node->related_ast_node;
-
-	allocate_more_input_pins(logic_node, 1);
-	allocate_more_output_pins(logic_node, 1);
-
-	return logic_node;
-
+	return generic_make_nport_gate(LOGICAL_NOT, {1}, 1, node, mark);
 }
 
 /*---------------------------------------------------------------------------------------------
@@ -114,22 +125,7 @@ nnode_t *make_not_gate(nnode_t *node, short mark)
  *-------------------------------------------------------------------------------------------*/
 nnode_t *make_1port_gate(operation_list type, int width_input, int width_output, nnode_t *node, short mark)
 {
-	nnode_t *logic_node;
-
-	logic_node = allocate_nnode();
-	logic_node->traverse_visited = mark;
-	logic_node->type = type;
-	logic_node->name = node_name(logic_node, node->name);
-	logic_node->related_ast_node = node->related_ast_node;
-
-	/* add the input ports as needed */
-	allocate_more_input_pins(logic_node, width_input);
-	add_input_port_information(logic_node, width_input);
-	/* add output */
-	allocate_more_output_pins(logic_node, width_output);
-	add_output_port_information(logic_node, width_output);
-
-	return logic_node;
+	return generic_make_nport_gate(type, {width_input}, width_output, node, mark);
 }
 /*---------------------------------------------------------------------------------------------
  * (function: make_1port_logic_gate)
@@ -137,9 +133,7 @@ nnode_t *make_1port_gate(operation_list type, int width_input, int width_output,
  *-------------------------------------------------------------------------------------------*/
 nnode_t *make_1port_logic_gate(operation_list type, int width, nnode_t *node, short mark)
 {
-	nnode_t *logic_node = make_1port_gate(type, width, 1, node, mark);
-
-	return logic_node;
+	return generic_make_nport_gate(type, {width}, 1, node, mark);
 }
 
 /*---------------------------------------------------------------------------------------------
@@ -148,13 +142,10 @@ nnode_t *make_1port_logic_gate(operation_list type, int width, nnode_t *node, sh
  *-------------------------------------------------------------------------------------------*/
 nnode_t *make_1port_logic_gate_with_inputs(operation_list type, int width, signal_list_t *pin_list, nnode_t *node, short mark)
 {
-	nnode_t *logic_node;
-	int i;
-
-	logic_node = make_1port_gate(type, width, 1, node, mark);
+	nnode_t *logic_node = generic_make_nport_gate(type, {width}, 1, node, mark);
 
 	/* hookup all the pins */
-	for (i = 0; i < width; i++)
+	for ( int i = 0; i < width; i++)
 	{
 		add_input_pin_to_node(logic_node, pin_list->pins[i], i);
 	}
@@ -163,54 +154,21 @@ nnode_t *make_1port_logic_gate_with_inputs(operation_list type, int width, signa
 }
 
 /*---------------------------------------------------------------------------------------------
- * (function: make_3port_logic_gates)
- * 	Make a 3 port gate all variable port widths.
- *-------------------------------------------------------------------------------------------*/
-nnode_t *make_3port_gate(operation_list type, int width_port1, int width_port2, int width_port3, int width_output, nnode_t *node, short mark)
-{
-	nnode_t *logic_node = allocate_nnode();
-	logic_node->traverse_visited = mark;
-	logic_node->type = type;
-	logic_node->name = node_name(logic_node, node->name);
-	logic_node->related_ast_node = node->related_ast_node;
-
-	/* add the input ports as needed */
-	allocate_more_input_pins(logic_node, width_port1);
-	add_input_port_information(logic_node, width_port1);
-	allocate_more_input_pins(logic_node, width_port2);
-	add_input_port_information(logic_node, width_port2);
-	allocate_more_input_pins(logic_node, width_port3);
-	add_input_port_information(logic_node, width_port3);
-	/* add output */
-	allocate_more_output_pins(logic_node, width_output);
-	add_output_port_information(logic_node, width_output);
-
-	return logic_node;
-}
-
-
-/*---------------------------------------------------------------------------------------------
  * (function: make_2port_logic_gates)
  * 	Make a 2 port gate with variable sizes.  The first port will be input_pins index 0..width_port1.
  *-------------------------------------------------------------------------------------------*/
 nnode_t *make_2port_gate(operation_list type, int width_port1, int width_port2, int width_output, nnode_t *node, short mark)
 {
-	nnode_t *logic_node = allocate_nnode();
-	logic_node->traverse_visited = mark;
-	logic_node->type = type;
-	logic_node->name = node_name(logic_node, node->name);
-	logic_node->related_ast_node = node->related_ast_node;
+	return generic_make_nport_gate(type, {width_port1, width_port2}, width_output, node, mark);
+}
 
-	/* add the input ports as needed */
-	allocate_more_input_pins(logic_node, width_port1);
-	add_input_port_information(logic_node, width_port1);
-	allocate_more_input_pins(logic_node, width_port2);
-	add_input_port_information(logic_node, width_port2);
-	/* add output */
-	allocate_more_output_pins(logic_node, width_output);
-	add_output_port_information(logic_node, width_output);
-
-	return logic_node;
+/*---------------------------------------------------------------------------------------------
+ * (function: make_3port_logic_gates)
+ * 	Make a 3 port gate all variable port widths.
+ *-------------------------------------------------------------------------------------------*/
+nnode_t *make_3port_gate(operation_list type, int width_port1, int width_port2, int width_port3, int width_output, nnode_t *node, short mark)
+{
+	return generic_make_nport_gate(type, {width_port1, width_port2, width_port3}, width_output, node, mark);
 }
 
 /*---------------------------------------------------------------------------------------------
@@ -219,63 +177,7 @@ nnode_t *make_2port_gate(operation_list type, int width_port1, int width_port2, 
  *-------------------------------------------------------------------------------------------*/
 nnode_t *make_nport_gate(operation_list type, int port_sizes, int width, int width_output, nnode_t *node, short mark)
 {
-    int i;
-	nnode_t *logic_node = allocate_nnode();
-	logic_node->traverse_visited = mark;
-	logic_node->type = type;
-	logic_node->name = node_name(logic_node, node->name);
-	logic_node->related_ast_node = node->related_ast_node;
-
-	/* add the input ports as needed */
-    for(i = 0; i < port_sizes; i++) {
-    	allocate_more_input_pins(logic_node, width);
-	    add_input_port_information(logic_node, width);
-    }
-	//allocate_more_input_pins(logic_node, width_port2);
-	//add_input_port_information(logic_node, width_port2);
-	/* add output */
-	allocate_more_output_pins(logic_node, width_output);
-	add_output_port_information(logic_node, width_output);
-
-	return logic_node;
-}
-
-const char *edge_type_blif_str(nnode_t *node)
-{
-
-	if(node->type != FF_NODE)
-		return NULL;
-
-	switch(node->edge_type)
-	{
-		case FALLING_EDGE_SENSITIVITY:	return "fe";
-		case RISING_EDGE_SENSITIVITY:	return "re";
-		case ACTIVE_HIGH_SENSITIVITY:	return "ah";
-		case ACTIVE_LOW_SENSITIVITY:	return "al";
-		case ASYNCHRONOUS_SENSITIVITY:	return "as";
-		default:	
-			error_message(NETLIST_ERROR, node->line_number, node->file_number,
-				"undefined sensitivity kind for flip flop %s", edge_type_e_STR[node->edge_type]);
-				
-			return NULL;
-	}
-}
-
-edge_type_e edge_type_blif_enum(std::string edge_kind_str)
-{
-
-	if		(edge_kind_str == "fe")	return FALLING_EDGE_SENSITIVITY;
-	else if	(edge_kind_str == "re")	return RISING_EDGE_SENSITIVITY;
-	else if	(edge_kind_str == "ah")	return ACTIVE_HIGH_SENSITIVITY;
-	else if	(edge_kind_str == "al")	return ACTIVE_LOW_SENSITIVITY;
-	else if	(edge_kind_str == "as")	return ASYNCHRONOUS_SENSITIVITY;
-	else
-	{
-		error_message(NETLIST_ERROR, -1, -1,
-			"undefined sensitivity kind for flip flop %s", edge_kind_str.c_str());
-
-		return UNDEFINED_SENSITIVITY;
-	}
+	return generic_make_nport_gate(type, std::vector<int>(port_sizes, width), width_output, node, mark);;
 }
 
 /*----------------------------------------------------------------------------
@@ -287,6 +189,7 @@ char *hard_node_name(nnode_t * /*node*/, char *instance_name_prefix, char *hb_na
 	char *return_node_name;
 
 	/* create the unique name for this node */
+	/* TODO: shouldn't we use the unique node name id? */
 	return_node_name = make_full_ref_name(instance_name_prefix, hb_name, hb_inst, NULL, -1);
 
 	unique_node_name_id ++;

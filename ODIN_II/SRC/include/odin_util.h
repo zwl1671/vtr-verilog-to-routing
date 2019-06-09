@@ -53,6 +53,11 @@ std::string get_file_extension(std::string input_file);
 
 const char *node_name_based_on_op(nnode_t *node);
 const char *name_based_on_op(operation_list op);
+operation_list op_based_on_name(const char *input);
+
+const char *name_based_on_edge(edge_type_e sensitivity_kind);
+const char *node_name_based_on_edge(nnode_t *node);
+edge_type_e edge_based_on_name(const char *input);
 
 char *make_signal_name(char *signal_name, int bit);
 char *make_full_ref_name(const char *previous, const char *module_name, const char *module_instance_name, const char *signal_name, long bit);
@@ -105,6 +110,7 @@ int print_progress_bar(double completion, int position, int length, double time)
 void trim_string(char* string, const char *chars);
 bool only_one_is_true(std::vector<bool> tested);
 int odin_sprintf (char *s, const char *format, ...);
+char *odin_strgen(const char *format, ...);
 
 void passed_verify_i_o_availabilty(struct nnode_t_t *node, int expected_input_size, int expected_output_size, const char *current_src, int line_src);
 

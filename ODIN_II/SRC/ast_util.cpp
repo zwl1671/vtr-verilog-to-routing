@@ -1055,7 +1055,7 @@ ast_node_t *resolve_ast_node(STRING_CACHE *local_param_table_sc, short initial, 
  * Make a unique name for a module based on its parameter list
  * e.g. for a "mod #(0,1,2,3) a(b,c,d)" instantiation you get name___0_1_2_3
  */
-char *make_module_param_name(STRING_CACHE *defines_for_module_sc, ast_node_t *module_param_list, char *module_name)
+char *make_module_param_name(STRING_CACHE *defines_sc, ast_node_t *module_param_list, char *module_name)
 {
 	char *module_param_name = (char*)vtr::malloc((strlen(module_name)+1024) * sizeof(char));
 	strcpy(module_param_name, module_name);
@@ -1069,7 +1069,7 @@ char *make_module_param_name(STRING_CACHE *defines_for_module_sc, ast_node_t *mo
 		{
 			if (module_param_list->children[i]->children[5]) 
 			{
-				ast_node_t *node = resolve_node(defines_for_module_sc, module_name, module_param_list->children[i]->children[5]);
+				ast_node_t *node = resolve_node(defines_sc, module_name, module_param_list->children[i]->children[5]);
 				oassert(node->type == NUMBERS);
 				odin_sprintf(module_param_name, "%s_%ld", module_param_name, module_param_list->children[i]->children[5]->types.number.value);
 			}
@@ -1472,18 +1472,18 @@ ast_node_t *node_is_ast_constant(ast_node_t *node){
 /*---------------------------------------------------------------------------------------------
  * (function: node_is_ast_constant)
  *-------------------------------------------------------------------------------------------*/
-ast_node_t *node_is_ast_constant(ast_node_t *node, STRING_CACHE *defines_for_module_sc){
+ast_node_t *node_is_ast_constant(ast_node_t *node, STRING_CACHE *defines_sc){
 	if (node && (node_is_constant(node) 
 		|| (node->types.variable.is_parameter == TRUE)
-		|| (node->type == UNARY_OPERATION && node_is_ast_constant(node->children[0], defines_for_module_sc))
-		|| (node->type == BINARY_OPERATION && node_is_ast_constant(node->children[0], defines_for_module_sc) && node_is_ast_constant(node->children[1], defines_for_module_sc))))
+		|| (node->type == UNARY_OPERATION && node_is_ast_constant(node->children[0], defines_sc))
+		|| (node->type == BINARY_OPERATION && node_is_ast_constant(node->children[0], defines_sc) && node_is_ast_constant(node->children[1], defines_sc))))
 	{
 		return node;
 	}
 	else if (node && node->type == IDENTIFIERS) {
 		int sc_spot;
-		if ((sc_spot = sc_lookup_string(defines_for_module_sc, node->types.identifier)) != -1
-			&& node_is_ast_constant((ast_node_t *)defines_for_module_sc->data[sc_spot]))
+		if ((sc_spot = sc_lookup_string(defines_sc, node->types.identifier)) != -1
+			&& node_is_ast_constant((ast_node_t *)defines_sc->data[sc_spot]))
 		{
 			return node;
 		}

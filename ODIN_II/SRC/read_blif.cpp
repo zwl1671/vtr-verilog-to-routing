@@ -339,7 +339,7 @@ void create_latch_node_and_driver(FILE *file, Hashtable *output_nets_hash)
 	nnode_t *new_node = allocate_nnode();
 	new_node->related_ast_node = NULL;
 	new_node->type = FF_NODE;
-	new_node->edge_type = edge_type_blif_enum(names[2]);
+	new_node->edge_type = edge_based_on_name(names[2]);
 
 	/* Read in the initial value of the latch.
 	   Possible values from a blif file are:

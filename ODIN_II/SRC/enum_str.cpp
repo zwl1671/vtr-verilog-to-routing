@@ -2,23 +2,26 @@
 
 const char *file_extension_supported_STR[] =
 {
-	".v"
+	".v",
+	"file_extension_supported_END"
 };
 
 const char *signedness_STR[] =
 {
 	"SIGNED",
-	"UNSIGNED"
+	"UNSIGNED",
+	"signedness_END"
 };
 
 const char *edge_type_e_STR[] =
 {
-	"UNDEFINED_SENSITIVITY",
-	"FALLING_EDGE_SENSITIVITY",
-	"RISING_EDGE_SENSITIVITY",
-	"ACTIVE_HIGH_SENSITIVITY",
-	"ACTIVE_LOW_SENSITIVITY",
-	"ASYNCHRONOUS_SENSITIVITY",
+	"undef",
+	"fe",
+	"re",
+	"ah",
+	"al",
+	"as",
+	"edge_type_e_END"
 };
 
 const char *_ZERO_GND_ZERO[] = 
@@ -106,7 +109,7 @@ const char *operation_list_STR[][2] =
 	{"GENERIC",         "GEN"}, /*added for the unknown node type */
 	{"FULLADDER",       "FlADD"},
 	{"CLOG2",			"CL2"}, // $clog2
-	{"ERROR OOB",		"OOB"} // should not reach this
+	{"operation_list_END",		"operation_list_END"} // should not reach this
 };
 
 const char *ids_STR []= 

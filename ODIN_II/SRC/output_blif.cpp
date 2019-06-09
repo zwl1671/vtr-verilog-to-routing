@@ -682,9 +682,6 @@ void define_ff(nnode_t *node, FILE *out)
 	if(initial_value == -1)
 		initial_value = 3;
 
-	// grab the edge sensitivity of the flip flop
-	const char *edge_type_str = edge_type_blif_str(node); 
-
 	std::string input;
 	std::string output;
 	std::string clock_driver;
@@ -718,7 +715,7 @@ void define_ff(nnode_t *node, FILE *out)
 
 
 	/* clock */
-	fprintf(out, "%s ", edge_type_str);
+	fprintf(out, "%s ", node_name_based_on_edge(node));
 	if(global_args.high_level_block != NULL)
 	{
 		fprintf(out, "%s^^%i-%i ",

@@ -169,8 +169,6 @@ struct global_args_t_t
 /**
  * defined in enum_str.cpp
  */
-extern const char *file_extension_supported_STR[];
-
 extern const char *ZERO_GND_ZERO;
 extern const char *ONE_VCC_CNS;
 extern const char *ZERO_PAD_ZERO;
@@ -178,6 +176,7 @@ extern const char *ZERO_PAD_ZERO;
 extern const char *SINGLE_PORT_RAM_string;
 extern const char *DUAL_PORT_RAM_string;
 
+extern const char *file_extension_supported_STR[];
 extern const char *signedness_STR[];
 extern const char *edge_type_e_STR[];
 extern const char *operation_list_STR[][2];
@@ -556,8 +555,6 @@ struct npin_t_t
 	bool delay_cycle;
 	
 	unsigned long coverage;
-	bool is_default; // The pin is feeding a mux from logic representing an else or default.
-	bool is_implied; // This signal is implied.
 
 	////////////////////
 
