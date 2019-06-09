@@ -73,17 +73,16 @@ npin_t *get_one_pin(netlist_t *netlist)
  * (function: make_nport_logic_gates)
  * 	Make a n port gate with variable sizes.  The first port will be input_pins index 0..width_port1.
  *-------------------------------------------------------------------------------------------*/
-static nnode_t *generic_make_nport_gate(operation_list type, std::vector<int> widths, int width_output, nnode_t *node, short mark)
+nnode_t *generic_make_nport_gate(operation_list type, std::vector<int> widths, int width_output, ast_node_t *related_ast_node, char *instance_name_prefix, short mark)
 {
-    int i;
 	nnode_t *logic_node = allocate_nnode();
 	logic_node->traverse_visited = mark;
 	logic_node->type = type;
-	logic_node->name = node_name(logic_node, node->name);
-	logic_node->related_ast_node = node->related_ast_node;
+	logic_node->name = node_name(logic_node, instance_name_prefix);
+	logic_node->related_ast_node = related_ast_node;
 
 	/* add the input ports as needed */
-    for(i = 0; i < widths.size(); i++) {
+    for(int i = 0; i < widths.size(); i++) {
     	allocate_more_input_pins(logic_node, widths[i]);
 	    add_input_port_information(logic_node, widths[i]);
     }
@@ -94,6 +93,17 @@ static nnode_t *generic_make_nport_gate(operation_list type, std::vector<int> wi
 
 	return logic_node;
 }
+
+/*---------------------------------------------------------------------------------------------
+ * (function: make_nport_logic_gates)
+ * 	Make a n port gate with variable sizes.  The first port will be input_pins index 0..width_port1.
+ *-------------------------------------------------------------------------------------------*/
+static nnode_t *generic_make_nport_gate(operation_list type, std::vector<int> widths, int width_output, nnode_t *node, short mark)
+{
+	return generic_make_nport_gate(type, widths, width_output, node->related_ast_node, node->name, mark);
+}
+
+
 
 /*---------------------------------------------------------------------------------------------
  * (function: make_not_gate_with_input)

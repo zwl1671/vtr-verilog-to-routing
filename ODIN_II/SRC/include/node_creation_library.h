@@ -1,5 +1,7 @@
 #include "odin_types.h"
 
+nnode_t *generic_make_nport_gate(operation_list type, std::vector<int> widths, int width_output, ast_node_t *related_ast_node, char *instance_name_prefix, short mark);
+
 nnode_t *make_not_gate_with_input(npin_t *input_pin, nnode_t *node, short mark);
 nnode_t *make_1port_logic_gate_with_inputs(operation_list type, int width, signal_list_t *pin_list, nnode_t *node, short mark);
 nnode_t *make_2port_logic_gates_with_inputs(operation_list type, int width_port1, signal_list_t *pin_list1, int width_port2, signal_list_t *pin_list2, nnode_t *node, short mark);

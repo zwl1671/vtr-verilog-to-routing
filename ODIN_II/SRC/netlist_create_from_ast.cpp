@@ -3724,9 +3724,9 @@ void define_latchs_initial_value_inside_initial_statement(ast_node_t *initial_no
 /*---------------------------------------------------------------------------------------------
  * (function: terminate_registered_assignment)
  *-------------------------------------------------------------------------------------------*/
-void terminate_registered_assignment(ast_node_t *always_node, signal_list_t* assignment, signal_list_t *potential_clocks, char * /*instance_name_prefix*/)
+void terminate_registered_assignment(ast_node_t *always_node, signal_list_t* assignment, signal_list_t *potential_clocks, char * instance_name_prefix)
 {
-	oassert(potential_clocks != NULL);
+	oassert(potential_clocks != NULL && potential_clocks->pins);
 	
 	npin_t *local_clock_pin = NULL;
 	npin_t **list_dependence_pin = (npin_t **)vtr::calloc(assignment->count,sizeof(npin_t *));
@@ -3738,7 +3738,7 @@ void terminate_registered_assignment(ast_node_t *always_node, signal_list_t* ass
 		error_message(NETLIST_ERROR, always_node->line_number, always_node->file_number,
 			"%s","Sensitivity list is empty, cannot find a driver for this always block\n");		
 	}
-	else if(potential_clocks->count == 1)
+	else if(potential_clocks->count == 1 )
 	{
 		/* If this element is the only item in the sensitivity list then its the clock */
 		local_clock_pin = potential_clocks->pins[0];
@@ -3760,11 +3760,13 @@ void terminate_registered_assignment(ast_node_t *always_node, signal_list_t* ass
 		 * always @(negedge rst, posedge clk)
 		 * will always have to build circuitry and be evaluated using an async latch
 		 */
+
+
+		nnode_t *xor_gate = NULL;
+
 		int i;
 		for (i = 0; i < potential_clocks->count; i++)
 		{
-			// deal with all potential_clocks->pins[i]
-
 			/**
 			 * Combining edges to build multi edge support
 			 * Although latched circuits are bad, we need to support them
@@ -3782,6 +3784,104 @@ void terminate_registered_assignment(ast_node_t *always_node, signal_list_t* ass
 			 *  trigger  ---|> |
 			 * 				````    
 			 */
+
+			/* look up the net */
+
+			/* HERE create the ff node and hookup everything */
+			nnode_t *ff_node = allocate_nnode();
+			ff_node->related_ast_node = always_node;
+			ff_node->type = FF_NODE;
+			ff_node->edge_type = potential_clocks->pins[i]->sensitivity;
+
+			ff_node->name = odin_strgen("%s_%s[%d]", potential_clocks->pins[i]->name, node_name_based_on_op(ff_node),i);
+
+			/* allocate the pins needed */
+			allocate_more_input_pins(ff_node, 2);
+			add_input_port_information(ff_node, 1);
+			allocate_more_output_pins(ff_node, 1);
+			add_output_port_information(ff_node, 1);
+
+			/* add the clock to the flip_flop */
+			/* add a fanout pin */
+			npin_t *fanout_pin_of_clock = allocate_npin();
+			add_fanout_pin_to_net(potential_clocks->pins[i]->net, fanout_pin_of_clock);
+			add_input_pin_to_node(ff_node, fanout_pin_of_clock, 1);
+
+			/* build the not gate */
+			nnode_t *not_gate = allocate_nnode();
+			not_gate->related_ast_node = always_node;
+			not_gate->type = LOGICAL_NOT;
+
+			not_gate->name = odin_strgen("%s_%s[%d]", potential_clocks->pins[i]->name, node_name_based_on_op(not_gate),i);
+
+			/* allocate the pins needed */
+			allocate_more_input_pins(not_gate, 1);
+			add_input_port_information(not_gate, 1);
+			allocate_more_output_pins(not_gate, 1);
+			add_output_port_information(not_gate, 1);
+			connect_nodes(not_gate, 0, ff_node, 0);
+
+
+			connect_nodes(ff_node, 0, not_gate, 0);
+
+			/* finally change the output pin to the xor gate */
+			npin_t *ff_out = allocate_npin();
+			nnet_t *ff_net = allocate_nnet();
+			add_driver_pin_to_net(ff_net, ff_out);
+			ff_out->sensitivity = ASYNCHRONOUS_SENSITIVITY;
+			add_output_pin_to_node(ff_node, ff_out, 0);
+
+			npin_t *ff_fanout_pins[2] = {};
+			ff_fanout_pins[0] = allocate_npin();
+			ff_fanout_pins[1] = allocate_npin();
+
+			add_fanout_pin_to_net(ff_net, ff_fanout_pins[0]);
+			add_fanout_pin_to_net(ff_net, ff_fanout_pins[1]);
+
+			add_input_pin_to_node(not_gate, ff_fanout_pins[1], 0);
+
+
+			verilog_netlist->ff_nodes = (nnode_t**)vtr::realloc(verilog_netlist->ff_nodes, sizeof(nnode_t*)*(verilog_netlist->num_ff_nodes+1));
+			verilog_netlist->ff_nodes[verilog_netlist->num_ff_nodes] = ff_node;
+			verilog_netlist->num_ff_nodes++;
+
+			if(i == potential_clocks->count - 1)
+			{
+				add_input_pin_to_node(xor_gate, ff_fanout_pins[0], 1);
+			}
+			else
+			{
+				nnode_t *next_xor_gate = allocate_nnode();
+				next_xor_gate->related_ast_node = always_node;
+				next_xor_gate->type = LOGICAL_XOR;
+
+				next_xor_gate->name = odin_strgen("%s_%s[%d]", potential_clocks->pins[i]->name, node_name_based_on_op(next_xor_gate),i);
+
+				/* allocate the pins needed */
+				allocate_more_input_pins(next_xor_gate, 2);
+				add_input_port_information(next_xor_gate, 2);
+
+				allocate_more_output_pins(next_xor_gate, 1);
+				add_output_port_information(next_xor_gate, 1);
+
+				add_input_pin_to_node(next_xor_gate, ff_fanout_pins[0], 0);
+
+				/* finally change the output pin to the xor gate */
+				npin_t *new_local_clock_pin = allocate_npin();
+				nnet_t *output_net = allocate_nnet();
+				add_driver_pin_to_net(output_net, new_local_clock_pin);
+				new_local_clock_pin->sensitivity = ASYNCHRONOUS_SENSITIVITY;
+
+				add_output_pin_to_node(next_xor_gate, new_local_clock_pin, 0);
+
+				if(local_clock_pin != NULL)
+				{
+					add_input_pin_to_node(next_xor_gate, local_clock_pin, 1);
+				}
+
+				local_clock_pin = new_local_clock_pin;
+				xor_gate = next_xor_gate;
+			}
 		}
 	}
 
@@ -3837,18 +3937,9 @@ void terminate_registered_assignment(ast_node_t *always_node, signal_list_t* ass
 			ff_node->type = FF_NODE;
 			ff_node->edge_type = local_clock_pin->sensitivity;
 
-			/* create the unique name for this gate */
-			//ff_node->name = node_name(ff_node, instance_name_prefix);
 			/* Name the flipflop based on the name of its output pin */
-			const char *ff_base_name = node_name_based_on_op(ff_node);
-			ff_node->name = (char *)vtr::malloc(sizeof(char) * (strlen(pin->name) + strlen(ff_base_name) + 2));
-			odin_sprintf(ff_node->name, "%s_%s", pin->name, ff_base_name);
-
-			/* Copy over the initial value information from the net */
-			std::string ref_string(pin->name);
-			ref_string += "_latch_initial_value";
-
-			sc_spot = sc_add_string(local_symbol_table_sc, ref_string.c_str());
+			ff_node->name = odin_strgen("%s_%s", pin->name, node_name_based_on_op(ff_node));
+			sc_spot = sc_add_string(local_symbol_table_sc, ff_node->name);
 
 			if(local_symbol_table_sc->data[sc_spot] == NULL)
 			{
