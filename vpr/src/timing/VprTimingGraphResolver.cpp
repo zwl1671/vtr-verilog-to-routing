@@ -1,6 +1,7 @@
 #include "VprTimingGraphResolver.h"
 #include "atom_netlist.h"
 #include "atom_lookup.h"
+#include "route_tree_timing.h"
 
 VprTimingGraphResolver::VprTimingGraphResolver(const AtomNetlist& netlist, const AtomLookup& netlist_lookup, const tatum::TimingGraph& timing_graph, const AnalysisDelayCalculator& delay_calc)
     : netlist_(netlist)
@@ -171,12 +172,18 @@ std::vector<tatum::DelayComponent> VprTimingGraphResolver::interconnect_delay_br
         driver_component.type_name += "' routing";
         driver_component.delay = driver_clb_delay;
         components.push_back(driver_component);
+            
 
-        tatum::DelayComponent net_component;
-        //net_component.inst_name = cluster_ctx.clb_nlist.net_name(src_net);
-        net_component.type_name = "inter-block routing";
-        net_component.delay = net_delay;
-        components.push_back(net_component);
+        if (detail_level() == e_timing_report_detail::DETAILED_ROUTING) {
+            get_detailed_interconnect_components(components,src_net);
+        }
+        else {
+            tatum::DelayComponent net_component;
+            //net_component.inst_name = cluster_ctx.clb_nlist.net_name(src_net);
+            net_component.type_name = "inter-block routing";
+            net_component.delay = net_delay;
+            components.push_back(net_component);
+        }
 
         tatum::DelayComponent sink_component;
         //sink_component.inst_name = cluster_ctx.clb_nlist.block_name(sink_blk);
@@ -196,4 +203,42 @@ e_timing_report_detail VprTimingGraphResolver::detail_level() const {
 
 void VprTimingGraphResolver::set_detail_level(e_timing_report_detail report_detail) {
     detail_level_ = report_detail;
+}
+
+static void get_detailed_interconnect_components (std::vector<tatum::DelayComponent> &components, ClusterNetId net_id) {
+    t_rt_node *rt_root = traceback_to_route_tree(net_id);
+    load_new_subtree_R_upstream(rt_root); //load in the resistance values for the RT Tree
+    load_new_subtree_C_downstream(rt_root); //load in the capacitance values for the RT Tree
+    load_route_tree_Tdel(rt_root, 0.); //load the time delay values for the RT Tree
+    get_detailed_interconnect_components_recurr(components, rt_root);
+    free_route_tree(rt_root);
+}
+
+static void get_detailed_interconnect_components_recurr (std::vector<tatum::DelayComponent> &components, t_rt_node *node) {
+    
+    // Process the current edge as a net component, don't count it if it is a source or sink node.
+    auto& device_ctx = g_vpr_ctx.device();
+
+    if (device_ctx.rr_nodes[p->inode].type_string() != "SOURCE" && device_ctx.rr_nodes[p->inode].type_string() != "SINK")
+    {
+            tatum::DelayComponent net_component;
+            net_component.type_name = "L" + std::to_string(device_ctx.rr_nodes[p->inode].length()) + " "; // add the rr_node_type
+            net_component.type_name += device_ctx.rr_nodes[p->inode].type_string() + " "; // add the rr_node_string just like above
+            //unsure of coordinates
+            net_component.type_name = "(" + std::to_string(device_ctx.rr_nodes[p->inode].xlow()) + ", "; // add the rr_node_type
+            net_component.type_name += std::to_string(device_ctx.rr_nodes[p->inode].ylow()) + " -> "; // add the rr_node_type
+            net_component.type_name += std::to_string(device_ctx.rr_nodes[p->inode].xhigh()) + ", "; // add the rr_node_type
+            net_component.type_name +=  std::to_string(device_ctx.rr_nodes[p->inode].yhigh()) + ") "; // add the 
+            net_component.type_name = "inter-block routing"; // add the second set of coordinates
+            net_component.type_name = "inter-block routing"; // add the rr_node ids
+            // add the time delay
+
+            net_component.delay = net_delay;
+            components.push_back(net_component);
+    }
+
+    
+    for (t_linked_rt_edge* edge = node->u.child_list; edge != nullptr; edge = edge->next) {
+                  get_detailed_interconnect_components_recurr(components, edge->child);
+     }
 }
