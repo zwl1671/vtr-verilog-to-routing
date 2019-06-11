@@ -11,11 +11,20 @@ using namespace std;
 #include "net_delay.h"
 #include "route_tree_timing.h"
 
+
+ /********************** Variables local to this module ***********************/
+ 
+ /* Array below allows mapping from any rr_node to any rt_node currently in
+  *   * the rt_tree.                                                              */
+ 
+static std::unordered_map<int,float> inode_to_Tdel_map;
+
+
 /*********************** Subroutines local to this module ********************/
 
 static void load_one_net_delay(vtr::vector<ClusterNetId, float *> &net_delay, ClusterNetId net_id);
 
-static void load_one_net_delay_recurr(t_rt_node* node, vtr::vector<ClusterNetId, float *> &net_delay, ClusterNetId net_id);
+static void load_one_net_delay_recurr(t_rt_node* node, ClusterNetId net_id);
 
 static void load_one_constant_net_delay(vtr::vector<ClusterNetId, float *> &net_delay, ClusterNetId net_id, float delay_value);
 
@@ -70,6 +79,7 @@ void load_net_delay_from_routing(vtr::vector<ClusterNetId, float *> &net_delay) 
 			load_one_net_delay(net_delay, net_id); 
 		}
 	}
+    inode_to_Tdel_map.clear();
 	free_route_tree_timing_structs(); 
 }
 
@@ -84,49 +94,51 @@ static void load_one_net_delay(vtr::vector<ClusterNetId, float *> &net_delay, Cl
 	 * allocated.                                                                */
 
 	t_rt_node *rt_root;
-   
+    
+    auto& cluster_ctx = g_vpr_ctx.clustering();
+    auto& route_ctx = g_vpr_ctx.routing();
+
+
+    int inode;
+
     rt_root = traceback_to_route_tree(net_id); //obtain the root of the tree from the traceback
     rt_root->parent_switch = OPEN;
     load_new_subtree_R_upstream(rt_root); //load in the resistance values for the RT Tree
     load_new_subtree_C_downstream(rt_root); //load in the capacitance values for the RT Tree
     load_route_tree_Tdel(rt_root, 0.); //load the time delay values for the RT Tree
     // now I need to traverse the tree to fill in the values for the net_delay array.
-	load_one_net_delay_recurr(rt_root, net_delay, net_id);  
+	load_one_net_delay_recurr(rt_root, net_id);
+
+
+	for (unsigned int ipin = 1; ipin < cluster_ctx.clb_nlist.net_pins(net_id).size(); ipin++)
+    {
+        inode = route_ctx.net_rr_terminals[net_id][ipin];
+        net_delay[net_id][ipin] = inode_to_Tdel_map.find(inode)->second;
+    }
     free_route_tree(rt_root); // free the route tree
 }
 
-static void load_one_net_delay_recurr(t_rt_node* node, vtr::vector<ClusterNetId, float *> &net_delay, ClusterNetId net_id){
+static void load_one_net_delay_recurr(t_rt_node* node, ClusterNetId net_id){
 	/* This routine recursively traverses the route tree. It first searches      *
      * for the indices of net_delay which correspond to the input's inode.       *
      * Once it is found, the net_delay is immediately updated. Then it needs     *
      * to process all of the children.                                           */
 
-    // find the pin's index of the inode in the vector net_rr_terminals.
-	
-    auto& cluster_ctx = g_vpr_ctx.clustering();
-    auto& route_ctx = g_vpr_ctx.routing();
+	inode_to_Tdel_map[node->inode] = node->Tdel; // add to the map
 
-	for (unsigned int ipin = 1; ipin < cluster_ctx.clb_nlist.net_pins(net_id).size(); ipin++) {
-        if (route_ctx.net_rr_terminals[net_id][ipin] == node->inode)
-        {
-            net_delay[net_id][ipin] = node->Tdel;
-        }
-    }
-    
-    // finished processing the nodes, process the children.
+    // finished processing the node, process the children.
     
     for (t_linked_rt_edge* edge = node->u.child_list; edge != nullptr; edge = edge->next) {
-        load_one_net_delay_recurr(edge->child, net_delay, net_id);
+        load_one_net_delay_recurr(edge->child, net_id);
     }
 }
 
 static void load_one_constant_net_delay(vtr::vector<ClusterNetId, float *> &net_delay, ClusterNetId net_id, float delay_value) {
 
 	/* Sets each entry of the net_delay array for net inet to delay_value.     */
-	unsigned int ipin;
 	auto& cluster_ctx = g_vpr_ctx.clustering();
 
-	for (ipin = 1; ipin < cluster_ctx.clb_nlist.net_pins(net_id).size(); ipin++)
+	for (unsigned int ipin = 1; ipin < cluster_ctx.clb_nlist.net_pins(net_id).size(); ipin++)
 		net_delay[net_id][ipin] = delay_value;
 }
 
