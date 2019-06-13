@@ -114,6 +114,7 @@ tatum::EdgeDelayBreakdown VprTimingGraphResolver::edge_delay_breakdown(tatum::Ed
 std::vector<tatum::DelayComponent> VprTimingGraphResolver::interconnect_delay_breakdown(tatum::EdgeId edge, DelayType delay_type) const {
     VTR_ASSERT(timing_graph_.edge_type(edge) == tatum::EdgeType::INTERCONNECT);
     auto& cluster_ctx = g_vpr_ctx.clustering();
+    auto& route_ctx = g_vpr_ctx.routing();
 
     std::vector<tatum::DelayComponent> components;
 
@@ -179,8 +180,19 @@ std::vector<tatum::DelayComponent> VprTimingGraphResolver::interconnect_delay_br
         components.push_back(driver_component);
             
 
-        if (detail_level() == e_timing_report_detail::DETAILED_ROUTING) {
-            get_detailed_interconnect_components(components,src_net);
+        if (detail_level() == e_timing_report_detail::DETAILED_ROUTING && !route_ctx.trace.empty() && route_ctx.trace[src_net].head != nullptr) {
+//            auto& route_ctx = g_vpr_ctx.routing();
+//            auto nets = cluster_ctx.clb_nlist.nets();
+//            for (auto net_id : nets) {
+//                if (route_ctx.trace[net_id].head != nullptr)
+//                {
+//                    t_rt_node* rt_root = traceback_to_route_tree(net_id);
+//                    VTR_LOG("%d\n", rt_root->inode);
+//                    VTR_LOG("%d\n", rt_root->u.child_list->child->inode);
+//                }
+//                
+//            }
+             get_detailed_interconnect_components(components,src_net);
         }
         else {
             tatum::DelayComponent net_component;
@@ -234,7 +246,7 @@ static void get_detailed_interconnect_components_recurr (std::vector<tatum::Dela
             net_component.type_name += std::to_string(device_ctx.rr_nodes[node->inode].ylow()) + " -> "; // add the starting y-coordinate
             net_component.type_name += std::to_string(device_ctx.rr_nodes[node->inode].xhigh()) + ", "; // add the destination x-coordinate
             net_component.type_name +=  std::to_string(device_ctx.rr_nodes[node->inode].yhigh()) + ") "; // add the destination y-coordinate
-            net_component.delay = tatum::Time(node->Tdel - node->parent_node->Tdel); // add the delay
+            net_component.delay = tatum::Time(node->Tdel); //- node->parent_node->Tdel); // add the delay
             components.push_back(net_component);
     }
 
