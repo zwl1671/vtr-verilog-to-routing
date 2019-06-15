@@ -1,6 +1,7 @@
 #include <cstdio>
 #include <cmath>
 #include <vector>
+#include <queue>
 using namespace std;
 
 #include "vtr_assert.h"
@@ -65,6 +66,7 @@ static t_trace* traceback_to_route_tree_branch(t_trace* trace, std::map<int, t_r
 static std::pair<t_trace*, t_trace*> traceback_from_route_tree_recurr(t_trace* head, t_trace* tail, const t_rt_node* node);
 
 void collect_route_tree_connections(const t_rt_node* node, std::set<std::tuple<int, int, int>>& connections);
+
 /************************** Subroutine definitions ***************************/
 
 constexpr float epsilon = 1e-15;
@@ -690,6 +692,9 @@ t_rt_node* traceback_to_route_tree(t_trace* head) {
     while (trace) { //Each branch
         trace = traceback_to_route_tree_branch(trace, rr_node_to_rt);
     }
+
+    rr_node_to_rt[head->index]->parent_node = nullptr;
+    rr_node_to_rt[head->index]->parent_switch = OPEN;
 
     return rr_node_to_rt[head->index];
 }
@@ -1359,3 +1364,73 @@ void collect_route_tree_connections(const t_rt_node* node, std::set<std::tuple<i
         }
     }
 }
+void print_rt_tree(t_rt_node * rt_root)
+{
+
+    VTR_LOG("BEGININGRT: ");
+    //initialize temporary nodes
+    
+    t_rt_node *p; // this pointer will be used to process the front of the queue
+    t_rt_node *g; // this pointer will be used to process the front of the queue
+
+    t_linked_rt_edge *c; // this pointer will be used to process  
+    
+    
+    if (rt_root == nullptr) // root is null, then we return
+    {
+        return;
+    }
+
+    queue<t_rt_node *> q; //create a queue of t_rt_node
+    q.push(rt_root); //push the root into the queue
+    while (!q.empty()) 
+    {
+        int num_processed = q.size(); //keep track of the number of processed children
+        while (num_processed > 0) //ensures we print children on the same level
+        {
+            //dequeue the first element
+            p = q.front();
+            c = p -> u.child_list;
+            g = p -> parent_node;
+            q.pop();
+
+            auto& device_ctx = g_vpr_ctx.device();
+            //if (c != nullptr)
+            //{
+                if (g != nullptr)
+                {
+                    VTR_LOG("%s, inode: %d, parent: %d, switch_type: %d, switch_name: %s, C_downstream: %e, Tdel: %e, node.C(): %e, node.R(): %e, switch.R: %e, switch.Tdel: %e;", device_ctx.rr_nodes[p->inode].type_string(), p -> inode, g -> inode, device_ctx.rr_switch_inf[p->parent_switch].type(), device_ctx.rr_switch_inf[p->parent_switch].name, p -> C_downstream, p -> Tdel, device_ctx.rr_nodes[p->inode].C(),device_ctx.rr_nodes[p->inode].R(),device_ctx.rr_switch_inf[p->parent_switch].R,device_ctx.rr_switch_inf[p->parent_switch].Tdel);
+                }
+
+                else
+                {
+                    VTR_LOG("%s, inode: %d, parent: -1, switch_type: -1, switch_name: -1, C_downstream: %e, Tdel: %e, node.C(): %e, switch.Cinternal: -1, node.R(): %e, switch.R: -1, switch.Tdel: -1;", device_ctx.rr_nodes[p->inode].type_string(), p -> inode, p -> C_downstream, p -> Tdel, device_ctx.rr_nodes[p->inode].C(),device_ctx.rr_nodes[p->inode].R());
+                    //VTR_LOG("%s, inode: %d, parent: -1, switch_type: %d, switch_name: %s, C_downstream: %e, Tdel: %e, node.C(): %e, switch.Cinternal: %e, node.R(): %e, switch.R: %e, switch.Tdel: %e;", device_ctx.rr_nodes[p->inode].type_string(), p -> inode, device_ctx.rr_switch_inf[c->iswitch].type(), device_ctx.rr_switch_inf[c->iswitch].name, p -> C_downstream, p -> Tdel, device_ctx.rr_nodes[p->inode].C(),device_ctx.rr_switch_inf[c->iswitch].Cinternal,device_ctx.rr_nodes[p->inode].R(),device_ctx.rr_switch_inf[c->iswitch].R,device_ctx.rr_switch_inf[c->iswitch].Tdel);
+                }
+            //}
+
+//            else
+//            {
+//                if (g != nullptr)
+//                {
+//                    VTR_LOG("%s, inode: %d, parent: %d, switch_type: -1, switch_name: -1, C_downstream: %e, Tdel: %e, node.C(): %e, switch.Cinternal: -1, node.R(): %e, switch.R: -1, switch.Tdel: -1;", device_ctx.rr_nodes[p->inode].type_string(), p -> inode, g -> inode, p -> C_downstream, p -> Tdel, device_ctx.rr_nodes[p->inode].C(),device_ctx.rr_nodes[p->inode].R());
+//                }
+//                else
+//                {
+//                    VTR_LOG("%s, inode: %d, parent: -1, switch_type: -1, switch_name: -1, C_downstream: %e, Tdel: %e, node.C(): %e, switch.Cinternal: -1, node.R(): %e, switch.R: -1, switch.Tdel: -1;", device_ctx.rr_nodes[p->inode].type_string(), p -> inode, p -> C_downstream, p -> Tdel, device_ctx.rr_nodes[p->inode].C(),device_ctx.rr_nodes[p->inode].R());
+//                }
+//            }
+            
+
+            while (c != nullptr)
+            {
+                q.push(c->child);
+                c = c -> next;
+            }
+            num_processed--;
+        }
+        VTR_LOG("\n");
+    }
+    VTR_LOG(" ENDRT\n");
+}
+

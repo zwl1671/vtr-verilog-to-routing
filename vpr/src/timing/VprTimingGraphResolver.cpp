@@ -1,11 +1,6 @@
 #include "VprTimingGraphResolver.h"
 #include "atom_netlist.h"
 #include "atom_lookup.h"
-#include "route_tree_timing.h"
-
-
-static void get_detailed_interconnect_components (std::vector<tatum::DelayComponent> &components, ClusterNetId net_id);
-static void get_detailed_interconnect_components_recurr (std::vector<tatum::DelayComponent> &components, t_rt_node *node);
 
 
 VprTimingGraphResolver::VprTimingGraphResolver(const AtomNetlist& netlist, const AtomLookup& netlist_lookup, const tatum::TimingGraph& timing_graph, const AnalysisDelayCalculator& delay_calc)
@@ -181,18 +176,7 @@ std::vector<tatum::DelayComponent> VprTimingGraphResolver::interconnect_delay_br
             
 
         if (detail_level() == e_timing_report_detail::DETAILED_ROUTING && !route_ctx.trace.empty() && route_ctx.trace[src_net].head != nullptr) {
-//            auto& route_ctx = g_vpr_ctx.routing();
-//            auto nets = cluster_ctx.clb_nlist.nets();
-//            for (auto net_id : nets) {
-//                if (route_ctx.trace[net_id].head != nullptr)
-//                {
-//                    t_rt_node* rt_root = traceback_to_route_tree(net_id);
-//                    VTR_LOG("%d\n", rt_root->inode);
-//                    VTR_LOG("%d\n", rt_root->u.child_list->child->inode);
-//                }
-//                
-//            }
-             get_detailed_interconnect_components(components,src_net);
+            get_detailed_interconnect_components(components,src_net,sink_pin);
         }
         else {
             tatum::DelayComponent net_component;
@@ -222,36 +206,111 @@ void VprTimingGraphResolver::set_detail_level(e_timing_report_detail report_deta
     detail_level_ = report_detail;
 }
 
-static void get_detailed_interconnect_components (std::vector<tatum::DelayComponent> &components, ClusterNetId net_id) {
+void VprTimingGraphResolver::get_detailed_interconnect_components(std::vector<tatum::DelayComponent> &components, ClusterNetId net_id, ClusterPinId sink_pin ) const {
+    
+    
     t_rt_node *rt_root = traceback_to_route_tree(net_id);
     load_new_subtree_R_upstream(rt_root); //load in the resistance values for the RT Tree
     load_new_subtree_C_downstream(rt_root); //load in the capacitance values for the RT Tree
     load_route_tree_Tdel(rt_root, 0.); //load the time delay values for the RT Tree
-    get_detailed_interconnect_components_recurr(components, rt_root);
+    print_rt_tree(rt_root);
+    t_rt_node *rt_sink = find_pointer_to_sink(rt_root, net_id, sink_pin);
+    VTR_LOG("sink_inode:%d",rt_sink->inode);
+    get_detailed_interconnect_components_helper(components, rt_sink);
     free_route_tree(rt_root);
 }
 
-static void get_detailed_interconnect_components_recurr (std::vector<tatum::DelayComponent> &components, t_rt_node *node) {
-    
-    // Process the current edge as a net component, don't count it if it is a source or sink node.
-    auto& device_ctx = g_vpr_ctx.device();
+t_rt_node* VprTimingGraphResolver::find_pointer_to_sink(t_rt_node* rt_root, ClusterNetId net_id, ClusterPinId sink_pin) const
+{
+    auto& cluster_ctx = g_vpr_ctx.clustering();
+    auto& route_ctx = g_vpr_ctx.routing();
 
-    if (device_ctx.rr_nodes[node->inode].type() == CHANX || device_ctx.rr_nodes[node->inode].type() == CHANY)
+    unsigned int ipin;
+    int sink_inode = -1;
+
+    // find the ipin which will connect rr_terminals[net_id][ipin] to the ClusterPinId
+    for (ipin = 1; ipin < cluster_ctx.clb_nlist.net_pins(net_id).size(); ++ipin) {
+        if (cluster_ctx.clb_nlist.net_pin(net_id, ipin) == sink_pin)
+        {
+            sink_inode = route_ctx.net_rr_terminals[net_id][ipin];
+        }
+    }
+    
+    return find_pointer_to_sink_recurr(rt_root, sink_inode);
+}
+
+t_rt_node* VprTimingGraphResolver::find_pointer_to_sink_recurr(t_rt_node* node, int sink_inode) const
+{ // assumes the node sink exists
+    t_rt_node* found_node = nullptr;
+
+    if (node->inode == sink_inode)
     {
-            tatum::DelayComponent net_component;
-            net_component.type_name = "L" + std::to_string(device_ctx.rr_nodes[node->inode].length()) + " "; // add the rr_node_length
-            net_component.type_name += "%s ",device_ctx.rr_nodes[node->inode].type_string(); // add the rr_node_string just like above
-            //unsure of coordinates
-            net_component.type_name += "(" + std::to_string(device_ctx.rr_nodes[node->inode].xlow()) + ", "; // add the starting x-coordinate
-            net_component.type_name += std::to_string(device_ctx.rr_nodes[node->inode].ylow()) + " -> "; // add the starting y-coordinate
-            net_component.type_name += std::to_string(device_ctx.rr_nodes[node->inode].xhigh()) + ", "; // add the destination x-coordinate
-            net_component.type_name +=  std::to_string(device_ctx.rr_nodes[node->inode].yhigh()) + ") "; // add the destination y-coordinate
-            net_component.delay = tatum::Time(node->Tdel); //- node->parent_node->Tdel); // add the delay
-            components.push_back(net_component);
+        return node;
     }
 
-    
     for (t_linked_rt_edge* edge = node->u.child_list; edge != nullptr; edge = edge->next) {
-                  get_detailed_interconnect_components_recurr(components, edge->child);
-     }
+       found_node = find_pointer_to_sink_recurr(edge-> child, sink_inode);
+       if (found_node != nullptr)
+       {
+           return found_node;
+       }
+    }
+    return found_node;
+}
+void VprTimingGraphResolver::get_detailed_interconnect_components_helper (std::vector<tatum::DelayComponent> &components, t_rt_node *node) const{
+    
+    auto& device_ctx = g_vpr_ctx.device();
+    
+    std::vector<tatum::DelayComponent> interconnect_components; 
+
+    while (node != nullptr)
+    {
+        // Process the current edge as a net component, don't count it if it is a source or sink node.
+        if (device_ctx.rr_nodes[node->inode].type() == OPIN || device_ctx.rr_nodes[node->inode].type() == CHANX || device_ctx.rr_nodes[node->inode].type() == CHANY || device_ctx.rr_nodes[node->inode].type() == IPIN)
+        {
+                tatum::DelayComponent net_component;
+                    if (device_ctx.rr_nodes[node->inode].type() == CHANX || device_ctx.rr_nodes[node->inode].type() == CHANY)
+                    {
+                        net_component.type_name = device_ctx.arch->Segments[device_ctx.rr_indexed_data[device_ctx.rr_nodes[node->inode].cost_index()].seg_index].name + " "; // can i just access cost index with node->inode
+                        net_component.type_name += device_ctx.rr_nodes[node->inode].type_string(); // add the rr_node_string just like above
+                        net_component.type_name += " "; // add the rr_node_string just like above
+                        net_component.type_name += "L" + std::to_string(device_ctx.rr_nodes[node->inode].length()) + " "; // add the starting y-coordinate
+                        if (device_ctx.rr_nodes[node->inode].direction() == INC_DIRECTION || device_ctx.rr_nodes[node->inode].direction() == NO_DIRECTION)
+                        {
+                            net_component.type_name += "(" + std::to_string(device_ctx.rr_nodes[node->inode].xlow()) + ", "; // add the starting x-coordinate
+                            net_component.type_name += std::to_string(device_ctx.rr_nodes[node->inode].ylow()) + " -> "; // add the starting y-coordinate
+                            net_component.type_name += std::to_string(device_ctx.rr_nodes[node->inode].xhigh()) + ", "; // add the destination x-coordinate
+                            net_component.type_name +=  std::to_string(device_ctx.rr_nodes[node->inode].yhigh()) + ") "; // add the destination y-coordinate 
+                        }
+                        if (device_ctx.rr_nodes[node->inode].direction() == DEC_DIRECTION)
+                        {
+                            net_component.type_name += "(" + std::to_string(device_ctx.rr_nodes[node->inode].xhigh()) + ", "; // add the starting x-coordinate
+                            net_component.type_name += std::to_string(device_ctx.rr_nodes[node->inode].yhigh()) + " -> "; // add the starting y-coordinate
+                            net_component.type_name += std::to_string(device_ctx.rr_nodes[node->inode].xlow()) + ", "; // add the destination x-coordinate
+                            net_component.type_name +=  std::to_string(device_ctx.rr_nodes[node->inode].ylow()) + ") "; // add the destination y-coordinate 
+                        }
+                        if (device_ctx.rr_nodes[node->inode].direction() == BI_DIRECTION)
+                        {
+                            net_component.type_name += "(" + std::to_string(device_ctx.rr_nodes[node->inode].xlow()) + ", "; // add the starting x-coordinate
+                            net_component.type_name += std::to_string(device_ctx.rr_nodes[node->inode].ylow()) + " <-> "; // add the starting y-coordinate
+                            net_component.type_name += std::to_string(device_ctx.rr_nodes[node->inode].xhigh()) + ", "; // add the destination x-coordinate
+                            net_component.type_name +=  std::to_string(device_ctx.rr_nodes[node->inode].yhigh()) + ") "; // add the destination y-coordinate 
+                        }
+                    }
+                    else
+                    {
+                        net_component.type_name = device_ctx.rr_nodes[node->inode].type_string(); // add the rr_node_string just like above
+                        net_component.type_name += " "; // add the rr_node_string just like above
+                    }
+                //unsure of coordinates
+                net_component.type_name +=  std::to_string(node->inode); // add the destination y-coordinate
+                net_component.delay = tatum::Time(node->Tdel - node->parent_node->Tdel); // add the delay
+                interconnect_components.insert(interconnect_components.begin(),net_component);
+        }
+
+        node = node->parent_node; 
+    }
+
+    components.insert(components.end(), interconnect_components.begin(), interconnect_components.end());
+
 }
