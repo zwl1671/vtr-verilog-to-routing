@@ -79,7 +79,6 @@ void load_net_delay_from_routing(vtr::vector<ClusterNetId, float *> &net_delay) 
 			load_one_net_delay(net_delay, net_id); 
 		}
 	}
-    inode_to_Tdel_map.clear();
 	free_route_tree_timing_structs(); 
 }
 
@@ -102,7 +101,6 @@ static void load_one_net_delay(vtr::vector<ClusterNetId, float *> &net_delay, Cl
     int inode;
 
     rt_root = traceback_to_route_tree(net_id); //obtain the root of the tree from the traceback
-    rt_root->parent_switch = OPEN;
     load_new_subtree_R_upstream(rt_root); //load in the resistance values for the RT Tree
     load_new_subtree_C_downstream(rt_root); //load in the capacitance values for the RT Tree
     load_route_tree_Tdel(rt_root, 0.); //load the time delay values for the RT Tree
@@ -116,6 +114,7 @@ static void load_one_net_delay(vtr::vector<ClusterNetId, float *> &net_delay, Cl
         net_delay[net_id][ipin] = inode_to_Tdel_map.find(inode)->second;
     }
     free_route_tree(rt_root); // free the route tree
+    inode_to_Tdel_map.clear();
 }
 
 static void load_one_net_delay_recurr(t_rt_node* node, ClusterNetId net_id){
