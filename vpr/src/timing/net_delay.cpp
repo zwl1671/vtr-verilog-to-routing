@@ -10,12 +10,25 @@ using namespace std;
 #include "globals.h"
 #include "net_delay.h"
 #include "route_tree_timing.h"
-
+   
+ /* This module keeps track of the time delay of a signal to arrive for       *
+  * each pin of each net once timing-driven routing is complete. It           *
+  * achieves this by first constructing the skeleton route tree               * 
+  * from the traceback. Next, to obtain the completed route tree, it          *
+  * calls functions to calculate the resistance, capacitance, and time        *
+  * delays associated with each node. Then, it recursively traverses          *
+  * the tree, copying the time delay from each tree node into the             *
+  * net_delay data structure. Essentially, the delays are calculated          *
+  * by building the completed route tree from scratch, and is used            *
+  * to check against the time delays computed incrementallly during           * 
+  * timing-driven routing.                                                    */
 
  /********************** Variables local to this module ***********************/
  
- /* Array below allows mapping from any rr_node to any rt_node currently in
-  *   * the rt_tree.                                                              */
+ /* Unordered map below stores the pair whose key is the index of the rr_node *
+  * that corresponds to the rt_node, and whose value is the time delay        *
+  * associated with that node. The map will be used to store delays while     *
+  * traversing the nodes of the route tree in load_one_net_delay_recurr.      */
  
 static std::unordered_map<int,float> inode_to_Tdel_map;
 
@@ -65,10 +78,10 @@ void free_net_delay(vtr::vector<ClusterNetId, float *> &net_delay,
 void load_net_delay_from_routing(vtr::vector<ClusterNetId, float *> &net_delay) {
 
 	/* This routine loads net_delay[0..nets.size()-1][1..num_pins-1].  Each entry   *
-	 * is the Elmore delay from the net source to the appropriate sink.  Both    *
-	 * the rr_graph and the routing traceback must be completely constructed     *
-	 * before this routine is called, and the net_delay array must have been     *
-	 * allocated.                                                                */
+	 * is the Elmore delay from the net source to the appropriate sink.  Both       *
+	 * the rr_graph and the routing traceback must be completely constructed        *
+	 * before this routine is called, and the net_delay array must have been        *
+	 * allocated.                                                                   */
 	auto& cluster_ctx = g_vpr_ctx.clustering();
 
 
@@ -85,49 +98,44 @@ void load_net_delay_from_routing(vtr::vector<ClusterNetId, float *> &net_delay) 
 
 static void load_one_net_delay(vtr::vector<ClusterNetId, float *> &net_delay, ClusterNetId net_id) {
 	
-	/* This routine loads delay values of one net in the 2-dimensional vector    *
+	/* This routine loads delay values of one net of the 2-d data structure i.e. *
      * net_delay[net_id][1..num_pins-1]. First, it constructs the route tree     *
      * from the traceback, next it updates the values for R, C, and Tdel.        *
-     * Next, it walks the route tree recursively, updating the net delay         *
-     * array during the traversal. Finally it frees teh route tree.              *
-	 * allocated.                                                                */
+     * Next, it walks the route tree recursively, storing the time delays for    * 
+     * each node into the map inode_to_Tdel. Then, while looping through the     *
+     * net_delay array we search for the inode corresponding to the pin          * 
+     * identifiers, and updated the entry in net_delay.                          *
+     * array during the traversal. Finally, it frees the route tree and clears   *
+	 * the inode_to_Tdel_map associated with that net.                           */
 
 	t_rt_node *rt_root;
     
     auto& cluster_ctx = g_vpr_ctx.clustering();
     auto& route_ctx = g_vpr_ctx.routing();
 
-
     int inode;
 
-    rt_root = traceback_to_route_tree(net_id); //obtain the root of the tree from the traceback
-    load_new_subtree_R_upstream(rt_root); //load in the resistance values for the RT Tree
-    load_new_subtree_C_downstream(rt_root); //load in the capacitance values for the RT Tree
-    load_route_tree_Tdel(rt_root, 0.); //load the time delay values for the RT Tree
-    // now I need to traverse the tree to fill in the values for the net_delay array.
-	load_one_net_delay_recurr(rt_root, net_id);
+    rt_root = traceback_to_route_tree(net_id); // obtain the root of the tree constructed from the traceback
+    load_new_subtree_R_upstream(rt_root); // load in the resistance values for the route tree
+    load_new_subtree_C_downstream(rt_root); // load in the capacitance values for the route tree
+    load_route_tree_Tdel(rt_root, 0.); // load the time delay values for the route tree
+	load_one_net_delay_recurr(rt_root, net_id); // recursively the tree and load entries into the inode_to_Tdel map
 
-
-	for (unsigned int ipin = 1; ipin < cluster_ctx.clb_nlist.net_pins(net_id).size(); ipin++)
-    {
-        inode = route_ctx.net_rr_terminals[net_id][ipin];
-        net_delay[net_id][ipin] = inode_to_Tdel_map.find(inode)->second;
+	for (unsigned int ipin = 1; ipin < cluster_ctx.clb_nlist.net_pins(net_id).size(); ipin++) {
+        inode = route_ctx.net_rr_terminals[net_id][ipin]; // look for the inode corresponding to the net_delay indices 
+        net_delay[net_id][ipin] = inode_to_Tdel_map.find(inode)->second; // search for the value of Tdel in the inode map and load into net_delay
     }
     free_route_tree(rt_root); // free the route tree
-    inode_to_Tdel_map.clear();
+    inode_to_Tdel_map.clear(); // clear the net pairs from the map
 }
 
 static void load_one_net_delay_recurr(t_rt_node* node, ClusterNetId net_id){
-	/* This routine recursively traverses the route tree. It first searches      *
-     * for the indices of net_delay which correspond to the input's inode.       *
-     * Once it is found, the net_delay is immediately updated. Then it needs     *
-     * to process all of the children.                                           */
+	/* This routine recursively traverses the route tree, and copies the Tdel of the node into the map.  */
 
-	inode_to_Tdel_map[node->inode] = node->Tdel; // add to the map
+	inode_to_Tdel_map[node->inode] = node->Tdel; // add to the map, process current node
 
-    // finished processing the node, process the children.
     
-    for (t_linked_rt_edge* edge = node->u.child_list; edge != nullptr; edge = edge->next) {
+    for (t_linked_rt_edge* edge = node->u.child_list; edge != nullptr; edge = edge->next) { // process children
         load_one_net_delay_recurr(edge->child, net_id);
     }
 }

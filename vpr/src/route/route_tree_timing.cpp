@@ -608,9 +608,11 @@ void free_route_tree(t_rt_node* rt_node) {
         free_linked_rt_edge(rt_edge);
         rt_edge = next_edge;
     }
-    
-    if (!rr_node_to_rt_node.empty())
-        rr_node_to_rt_node[rt_node->inode] = nullptr;
+
+    if (!rr_node_to_rt_node.empty()) {
+        rr_node_to_rt_node.at(rt_node->inode) = nullptr;
+    }
+
     free_rt_node(rt_node);
 }
 
@@ -689,6 +691,10 @@ t_rt_node* traceback_to_route_tree(t_trace* head) {
     while (trace) { //Each branch
         trace = traceback_to_route_tree_branch(trace, rr_node_to_rt);
     }
+     // Due to the recursive nature of traceback_to_route_tree_branch,
+     // the source node is not properly configured.
+     // Here, for the source we set the parent node and switch to be
+     // nullptr and OPEN respectively.
 
     rr_node_to_rt[head->index]->parent_node = nullptr;
     rr_node_to_rt[head->index]->parent_switch = OPEN;
