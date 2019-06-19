@@ -101,28 +101,28 @@ static void load_one_net_delay(vtr::vector<ClusterNetId, float*>& net_delay, Clu
      * array during the traversal. Finally, it frees the route tree and clears   *
      * the inode_to_Tdel_map associated with that net.                           */
 
-    t_rt_node* rt_root;
-
-    auto& cluster_ctx = g_vpr_ctx.clustering();
     auto& route_ctx = g_vpr_ctx.routing();
 
+    if (route_ctx.trace[net_id].head == nullptr) { // check if the traceback is null
+        vpr_throw(VPR_ERROR_TIMING, __FILE__, __LINE__,
+                  "in alloc_and_load_rc_tree: Traceback for net %lu does not exist.\n", size_t(net_id));
+    }
+
+    auto& cluster_ctx = g_vpr_ctx.clustering();
     int inode;
 
-    rt_root = traceback_to_route_tree(net_id);  // obtain the root of the tree constructed from the traceback
-    
-    if (rt_root) {
-        load_new_subtree_R_upstream(rt_root);       // load in the resistance values for the route tree
-        load_new_subtree_C_downstream(rt_root);     // load in the capacitance values for the route tree
-        load_route_tree_Tdel(rt_root, 0.);          // load the time delay values for the route tree
-        load_one_net_delay_recurr(rt_root, net_id); // recursively the tree and load entries into the inode_to_Tdel map
+    t_rt_node* rt_root = traceback_to_route_tree(net_id); // obtain the root of the tree constructed from the traceback
+    load_new_subtree_R_upstream(rt_root);                 // load in the resistance values for the route tree
+    load_new_subtree_C_downstream(rt_root);               // load in the capacitance values for the route tree
+    load_route_tree_Tdel(rt_root, 0.);                    // load the time delay values for the route tree
+    load_one_net_delay_recurr(rt_root, net_id);           // recursively the tree and load entries into the inode_to_Tdel map
 
-        for (unsigned int ipin = 1; ipin < cluster_ctx.clb_nlist.net_pins(net_id).size(); ipin++) {
-            inode = route_ctx.net_rr_terminals[net_id][ipin];                // look for the inode corresponding to the net_delay indices
-            net_delay[net_id][ipin] = inode_to_Tdel_map.find(inode)->second; // search for the value of Tdel in the inode map and load into net_delay
-        }
-        free_route_tree(rt_root);  // free the route tree
-        inode_to_Tdel_map.clear(); // clear the net pairs from the map
+    for (unsigned int ipin = 1; ipin < cluster_ctx.clb_nlist.net_pins(net_id).size(); ipin++) {
+        inode = route_ctx.net_rr_terminals[net_id][ipin];                // look for the inode corresponding to the net_delay indices
+        net_delay[net_id][ipin] = inode_to_Tdel_map.find(inode)->second; // search for the value of Tdel in the inode map and load into net_delay
     }
+    free_route_tree(rt_root);  // free the route tree
+    inode_to_Tdel_map.clear(); // clear the net pairs from the map
 }
 
 static void load_one_net_delay_recurr(t_rt_node* node, ClusterNetId net_id) {
