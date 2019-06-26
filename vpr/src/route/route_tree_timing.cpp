@@ -21,11 +21,7 @@ using namespace std;
  * about the partial routing during timing-driven routing, so the routines
  * in this module are used to keep a tree representation of the partial
  * routing during timing-driven routing.  This allows rapid incremental
- * timing analysis.  The net_delay module does timing analysis in one step
- * (not incrementally as pieces of the routing are added).  I could probably
- * one day remove a lot of net_delay.c and call the corresponding routines
- * here, but it's useful to have a from-scratch delay calculator to check
- * the results of this one.                                                  */
+ * timing analysis.                                                          */
 
 /********************** Variables local to this module ***********************/
 

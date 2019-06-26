@@ -471,6 +471,11 @@ bool try_timing_driven_route(const t_router_opts& router_opts,
 
             critical_path = timing_info->least_slack_critical_path();
 
+            //When the assertion level is >= 3, we call modules from net_delay during routing.
+            //net_delay calls the function free_route_tree_timing_structs which incidentally clears
+            //the rr_node_to_rt_node lookup vector that is also needed during routing. Therefore,
+            //we push the invocation of free_route_tree_timing_structs() later in the function
+            //where we check if the assertion level >= 3.
             VTR_ASSERT_SAFE(timing_driven_check_net_delays(net_delay));
 
             if (itry == 1) {
@@ -519,7 +524,22 @@ bool try_timing_driven_route(const t_router_opts& router_opts,
 
                 //Update best metrics
                 if (timing_info) {
+                    //This check has been previously mentioned before the statement
+                    //VTR_ASSERT_SAFE(timing_driven_check_net_delays). We check if
+                    //assertion level is >= 3, which means we previously
+                    //allocated route tree structures are on the free list,
+                    //and need to be freed before our next call of
+                    //timing_driven_check_net_delays.
+                    if (VTR_ASSERT_LEVEL >= 3) {
+                        free_route_tree_timing_structs();
+                    }
+
+                    //See preceding comment for the reason we free the route tree data
+                    //structures outside of their construction and analysis within
+                    //load_net_delay_from_routing.
+
                     timing_driven_check_net_delays(net_delay);
+                    free_route_tree_timing_structs();
 
                     best_routing_metrics.sTNS = timing_info->setup_total_negative_slack();
                     best_routing_metrics.sWNS = timing_info->setup_worst_negative_slack();
@@ -580,7 +600,7 @@ bool try_timing_driven_route(const t_router_opts& router_opts,
         }
 
         /*
-         * Prepare for the next iteration
+         * once routing is complete. next iteration
          */
 
         if (router_opts.route_bb_update == e_route_bb_update::DYNAMIC) {

@@ -47,6 +47,7 @@ using namespace std;
 #include "rr_graph.h"
 #include "pb_type_graph.h"
 #include "route_common.h"
+#include "route_tree_timing.h"
 #include "timing_place_lookup.h"
 #include "route_export.h"
 #include "vpr_api.h"
@@ -745,7 +746,10 @@ RouteStatus vpr_load_routing(t_vpr_setup& vpr_setup,
 
     if (vpr_setup.Timing.timing_analysis_enabled) {
         //Update timing info
+
+        //See discussion in net_delay.cpp for why we free route tree data structure outside of their use in net_delay.cpp
         load_net_delay_from_routing(net_delay);
+        free_route_tree_timing_structs();
 
         timing_info->update();
     }
@@ -1102,7 +1106,9 @@ void vpr_analysis(t_vpr_setup& vpr_setup, const t_arch& Arch, const RouteStatus&
     if (vpr_setup.TimingEnabled) {
         //Load the net delays
         net_delay = alloc_net_delay(&net_delay_ch);
+        //See discussion in net_delay.cpp for why we free route tree data structures outside of their use in net_delay.cpp
         load_net_delay_from_routing(net_delay);
+        free_route_tree_timing_structs();
     }
 
     routing_stats(vpr_setup.RouterOpts.full_stats, vpr_setup.RouterOpts.route_type,

@@ -77,7 +77,22 @@ void load_net_delay_from_routing(vtr::vector<ClusterNetId, float*>& net_delay) {
      * is the Elmore delay from the net source to the appropriate sink.  Both       *
      * the rr_graph and the routing traceback must be completely constructed        *
      * before this routine is called, and the net_delay array must have been        *
-     * allocated.                                                                   */
+     * allocated. At the end of this function, we would like to free the route      *
+     * tree data structures using free_route_tree_timing_structs(). If we were to   *
+     * call the free function at the end of this module, it would also clear        *
+     * rr_node_to_rt_node, a fast lookup vector, while it being used in routing.    *
+     * This arises from the VTR_ASSERT_SAFE(timing_check_net_delays) statement      *
+     * from route_timing.cpp and results in corruption of memory. Therefore,        *
+     * if you are to call load_net_delay_from_routing from another function,        *
+     * make sure to follow with a call to free_route_tree_timing_structs().         * 
+     * Example usage:                                                               *
+     * external module (...) {                                                      *
+     *     ...                                                                      *
+     *     load_net_delay_from_routing();                                           *
+     *     free_route_tree_timing_structs();                                        *
+     *     ...                                                                      *
+     * }                                                                            */
+
     auto& cluster_ctx = g_vpr_ctx.clustering();
 
     for (auto net_id : cluster_ctx.clb_nlist.nets()) {
@@ -87,7 +102,6 @@ void load_net_delay_from_routing(vtr::vector<ClusterNetId, float*>& net_delay) {
             load_one_net_delay(net_delay, net_id);
         }
     }
-    free_route_tree_timing_structs();
 }
 
 static void load_one_net_delay(vtr::vector<ClusterNetId, float*>& net_delay, ClusterNetId net_id) {
@@ -96,10 +110,9 @@ static void load_one_net_delay(vtr::vector<ClusterNetId, float*>& net_delay, Clu
      * from the traceback, next it updates the values for R, C, and Tdel.        *
      * Next, it walks the route tree recursively, storing the time delays for    * 
      * each node into the map inode_to_Tdel. Then, while looping through the     *
-     * net_delay array we search for the inode corresponding to the pin          * 
-     * identifiers, and updated the entry in net_delay.                          *
-     * array during the traversal. Finally, it frees the route tree and clears   *
-     * the inode_to_Tdel_map associated with that net.                           */
+     * net_delay matrix we search for the inode corresponding to the pin         * 
+     * id, and update the entry in net_delay. Finally, it frees the              *
+     * route tree and clears the inode_to_Tdel_map associated with that net.     */
 
     auto& route_ctx = g_vpr_ctx.routing();
 
